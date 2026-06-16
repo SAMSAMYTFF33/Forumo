@@ -271,4 +271,4 @@ def handle_callback(call):
 # ==========================================
 if __name__ == "__main__":
     print("✅ البوت يعمل...")
-    bot.infinity_polling(timeout=30, long_polling_timeout=30)
+    bot.infinity_polling(timeout=30, long_polling_timeout=30) 
