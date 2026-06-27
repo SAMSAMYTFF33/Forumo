@@ -40,7 +40,7 @@ def get_countdown_text() -> str:
 TELEGRAM_TOKEN = "8930982354:AAGx5-7Ub0s6RzOtb1fottRMPUEhLK-tMH4"
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
-CAPTCHA_ALERT_CHAT_ID = 8486184645
+CAPTCHA_ALERT_CHAT_ID = 7638322813
 
 BASE_URL      = "https://forumok.com"
 LOGIN_URL     = "https://forumok.com/login"
