@@ -803,7 +803,8 @@ def _bg_process_one_account_inner(chat_id, email, password, current_time):
     if settings['auto_hunt_status']:
         last_take = _bg_last_take.get(key, 0)
         if current_time - last_take >= TAKE_COOLDOWN:
-            if current_time - _bg_last_hunt.get(key, 0) >= 120:
+            if current_time - _bg_last_hunt.get(key, 0) >= 8:
+
                 _bg_last_hunt[key] = current_time
                 data, status = get_site_data(email, password, chat_id)
                 if status == "SUCCESS" and data and data['tasks']:
