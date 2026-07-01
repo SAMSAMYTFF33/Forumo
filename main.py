@@ -80,10 +80,146 @@ ACCOUNT_PROXIES = {
     ]
 }
 
-# ملاحظة: دالة جلب البروكسي ستتعامل مع البروكسي الجديد تلقائياً، ولكن إذا كان البروكسي الجديد 
-# يستخدم بيانات اعتماد (Username/Password) مختلفة عن الثابتة بالأسفل، يرجى الانتباه لتعديل الدالة بالأسفل.
 PROXY_USER = "sjtsjaec"
 PROXY_PASS = "b9veo1agajrv"
+
+# ==========================================
+# 🛡️ نظام البروكسيات المجانية الاحتياطي (الخفيف)
+# ==========================================
+FREE_PROXY_SOURCE = "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt"
+fallback_proxies = {email: None for email in EXEMPT_ACCOUNTS}
+fallback_lock = threading.Lock()
+_is_fetching_fallback = False
+
+def test_single_free_proxy(proxy_url):
+    """فحص بروكسي مجاني واحد للتأكد من عمله"""
+    try:
+        r = requests.get("https://api.ipify.org?format=json", 
+                         proxies={"http": proxy_url, "https": proxy_url}, 
+                         timeout=5)
+        if r.status_code == 200:
+            return proxy_url
+    except Exception:
+        pass
+    return None
+
+def refresh_fallback_proxies():
+    """جلب 80 بروكسي واختبارها حتى إيجاد 4 صالحة فقط وتوزيعها بتساوٍ"""
+    global fallback_proxies, _is_fetching_fallback
+    with fallback_lock:
+        if _is_fetching_fallback:
+            return
+        _is_fetching_fallback = True
+
+    print("[FALLBACK] ⚠️ البروكسيات الثابتة ميتة! جاري فحص 80 بروكسي مجاني كحد أقصى...")
+    try:
+        r = requests.get(FREE_PROXY_SOURCE, timeout=10)
+        if r.status_code == 200:
+            lines = [p.strip() for p in r.text.strip().split('\n') if p.strip()]
+            random.shuffle(lines)
+            sample = lines[:80]  # أخذ 80 فقط لتخفيف الضغط على الاستضافة
+            
+            working = []
+            # استخدام 8 خيوط كحد أقصى لعدم استهلاك المعالج
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+                future_to_proxy = {executor.submit(test_single_free_proxy, f"http://{p}"): p for p in sample}
+                for future in concurrent.futures.as_completed(future_to_proxy):
+                    res = future.result()
+                    if res:
+                        with fallback_lock:
+                            if len(working) < 4:
+                                working.append(res)
+                        # التوقف فوراً عند إيجاد 4 بروكسيات لرمي الباقي
+                        if len(working) >= 4:
+                            break
+            
+            # توزيع عادل للبروكسيات الأربعة على الحسابات المستثناة
+            with fallback_lock:
+                for i, email in enumerate(EXEMPT_ACCOUNTS):
+                    if i < len(working):
+                        fallback_proxies[email] = working[i]
+                    else:
+                        fallback_proxies[email] = None
+            print(f"[FALLBACK] ✅ تم التقاط {len(working)} بروكسيات مجانية وتوزيعها.")
+    except Exception as e:
+        print(f"[FALLBACK] ❌ خطأ في جلب البروكسيات: {e}")
+    finally:
+        with fallback_lock:
+            _is_fetching_fallback = False
+
+def get_fastest_proxy_exempt(email):
+    """
+    يختبر البروكسيات الثابتة ويُرجع الرابط الكامل لأسرع واحدة تعمل.
+    إذا فشلت جميعها ← يلجأ فوراً للبروكسي المجاني المخصص للحساب.
+    """
+    email_lower = email.lower().strip()
+    proxies = ACCOUNT_PROXIES.get(email_lower)
+    fastest_url = None
+    best_time = float('inf')
+    check_url = "https://api.ipify.org?format=json"
+
+    # 1. محاولة استخدام البروكسيات الثابتة
+    if proxies:
+        for prx in proxies:
+            try:
+                if "mnvfoqyw:18kjk2uk8zmh" in prx:
+                    parts = prx.split(":")
+                    proxy_url = f"http://{parts[2]}:{parts[3]}@{parts[0]}:{parts[1]}"
+                else:
+                    proxy_url = f"http://{PROXY_USER}:{PROXY_PASS}@{prx}"
+
+                start = time.time()
+                r = requests.get(check_url, headers=HEADERS,
+                                 proxies={"http": proxy_url, "https": proxy_url},
+                                 timeout=6)
+                elapsed = time.time() - start
+                if r.status_code == 200 and elapsed < best_time:
+                    best_time = elapsed
+                    fastest_url = proxy_url
+            except Exception:
+                continue
+
+    # إرجاع الثابت إذا كان يعمل
+    if fastest_url:
+        return fastest_url
+
+    # 2. اللجوء للنظام المجاني إذا ماتت كل البروكسيات الثابتة
+    with fallback_lock:
+        current_fallback = fallback_proxies.get(email_lower)
+    
+    # فحص المجاني الحالي
+    if current_fallback and test_single_free_proxy(current_fallback):
+        return current_fallback
+    
+    # إذا لم يكن هناك بروكسي مجاني صالح، نحدث القائمة
+    refresh_fallback_proxies()
+    
+    with fallback_lock:
+        return fallback_proxies.get(email_lower)
+
+def _session_has_live_proxy(session, email):
+    """يتحقق أن الجلسة الحالية تمر عبر بروكسي حي فعلاً قبل الاصطحاب"""
+    email_lower = email.lower().strip()
+    if email_lower not in EXEMPT_ACCOUNTS:
+        return True
+
+    proxy_dict = getattr(session, 'proxies', {})
+    if not proxy_dict:
+        return False
+
+    proxy_url = proxy_dict.get("http") or proxy_dict.get("https")
+    if not proxy_url:
+        return False
+
+    try:
+        r = requests.get("https://api.ipify.org?format=json", headers=HEADERS,
+                          proxies={"http": proxy_url, "https": proxy_url},
+                          timeout=6)
+        if r.status_code == 200:
+            return True
+    except Exception:
+        pass
+    return False
 
 # ==========================================
 # التخزين المحلي (بدون سحابة)
@@ -119,7 +255,7 @@ def delete_multi_account(chat_id, email):
 # متغيرات الحالة العامة
 # ==========================================
 user_sessions           = {}
-user_data_store         = {}   # chat_id -> {email, password}
+user_data_store         = {}   
 user_numbered_tasks     = {}
 user_transient_messages = {}
 
@@ -135,11 +271,8 @@ _handling_blocked_lock = threading.Lock()
 active_accounts      = {}
 active_accounts_lock = threading.Lock()
 
-# إعدادات لكل حساب (مفتاحها email)
 acct_auto_hunt_status = {}
 acct_hunt_mode        = {}
-
-# إعدادات الواجهة (مفتاحها chat_id)
 auto_hunt_status = {}
 hunt_mode        = {}
 last_take_time   = {}
@@ -259,77 +392,6 @@ def handle_captcha_detected(email, context=""):
         pass
 
 # ==========================================
-# البروكسيات للحسابات المستثناة (تعديل دقيق وإصلاح الفحص)
-# ==========================================
-def get_fastest_proxy_exempt(email):
-    """
-    يختبر البروكسيات الثابتة ويُرجع أسرع واحدة تعمل فعلاً.
-    إذا فشلت جميعها → يُرجع None.
-    """
-    proxies = ACCOUNT_PROXIES.get(email.lower().strip())
-    if not proxies:
-        return None
-    fastest = None
-    best_time = float('inf')
-    
-    check_url = "https://api.ipify.org?format=json"
-    
-    for prx in proxies:
-        try:
-            # التحقق مما إذا كان البروكسي يحتوي على بيانات الاعتماد مسبقاً من الإضافة الجديدة
-            if "mnvfoqyw:18kjk2uk8zmh" in prx:
-                # فصل الـ IP والبورت عن اليوزر والباس المدمجين
-                parts = prx.split(":")
-                proxy_url = f"http://{parts[2]}:{parts[3]}@{parts[0]}:{parts[1]}"
-            else:
-                proxy_url = f"http://{PROXY_USER}:{PROXY_PASS}@{prx}"
-                
-            start = time.time()
-            r = requests.get(check_url, headers=HEADERS,
-                             proxies={"http": proxy_url, "https": proxy_url},
-                             timeout=6)
-            elapsed = time.time() - start
-            if r.status_code == 200 and elapsed < best_time:
-                best_time = elapsed
-                fastest = prx
-        except Exception:
-            continue
-    return fastest
-
-
-def _session_has_live_proxy(session, email):
-    """
-    يتحقق أن الجلسة الحالية تمر عبر بروكسي حي فعلاً.
-    يُستخدم قبل كل اصطحاب للحسابات المستثناة.
-    """
-    email_lower = email.lower().strip()
-    if email_lower not in EXEMPT_ACCOUNTS:
-        return True
-
-    proxy_dict = getattr(session, 'proxies', {})
-    if not proxy_dict:
-        print(f"[PROXY-CHECK] ⛔ {email_lower}: لا يوجد بروكسي في الجلسة")
-        return False
-
-    proxy_url = proxy_dict.get("http") or proxy_dict.get("https")
-    if not proxy_url:
-        print(f"[PROXY-CHECK] ⛔ {email_lower}: proxies فارغ")
-        return False
-
-    check_url = "https://api.ipify.org?format=json"
-
-    try:
-        r = requests.get(check_url, headers=HEADERS,
-                          proxies={"http": proxy_url, "https": proxy_url},
-                          timeout=6)
-        if r.status_code == 200:
-            print(f"[PROXY-CHECK] ✅ {email_lower}: البروكسي حي وجاهز")
-            return True
-    except Exception as ex:
-        print(f"[PROXY-CHECK] ⛔ {email_lower}: البروكسي ميت — {ex}")
-    return False
-
-# ==========================================
 # إنشاء الجلسات
 # ==========================================
 def _safe_get(url, session=None, retries=3, **kwargs):
@@ -374,18 +436,12 @@ def get_authenticated_session(username, password):
     # تسجيل دخول جديد
     sess = requests.Session()
     if email_lower in EXEMPT_ACCOUNTS:
-        fast_proxy = get_fastest_proxy_exempt(email_lower)
-        if not fast_proxy:
-            print(f"[SESSION] ⛔ {email_lower}: رُفض تسجيل الدخول — كل البروكسيات ميتة")
+        fast_proxy_url = get_fastest_proxy_exempt(email_lower)
+        if not fast_proxy_url:
+            print(f"[SESSION] ⛔ {email_lower}: رُفض تسجيل الدخول — كل البروكسيات ميتة (الأساسية والمجانية)")
             return None
             
-        if "mnvfoqyw:18kjk2uk8zmh" in fast_proxy:
-            parts = fast_proxy.split(":")
-            proxy_url = f"http://{parts[2]}:{parts[3]}@{parts[0]}:{parts[1]}"
-        else:
-            proxy_url = f"http://{PROXY_USER}:{PROXY_PASS}@{fast_proxy}"
-            
-        sess.proxies = {"http": proxy_url, "https": proxy_url}
+        sess.proxies = {"http": fast_proxy_url, "https": fast_proxy_url}
 
     login_data = {
         "signin[username]": username,
@@ -430,7 +486,7 @@ def translate_and_parse_duration(duration_text):
         elif any(x in duration_text for x in ["час", "часа", "часов"]):
             total_minutes = number * 60
             text = "1 ساعة" if number == 1 else f"{number} ساعات"
-        elif any(x in duration_text for x in ["минут", "минуты", "минуту"]):
+        elif any(x in duration_text for x in ["минут", "минуты", "минутку"]):
             total_minutes = number
             text = "1 دقيقة" if number == 1 else f"{number} دقائق"
         else:
@@ -586,7 +642,6 @@ def get_site_data(username, password, chat_id):
         return {"balance": balance, "stats": stats_data, "tasks": tasks_list}, "SUCCESS"
     except Exception:
         return None, "ERROR"
-
 
 def take_task_via_post(session, task_page_url):
     try:
@@ -766,7 +821,7 @@ def _bg_process_one_account_inner(chat_id, email, password, current_time):
                                         bot.send_message(
                                             chat_id,
                                             f"⛔ **{e.split('@')[0]}**: توقف الاصطحاب\n"
-                                            f"❌ لا يوجد بروكسي حي — لن يتم الاصطحاب حتى يعود البروكسي.",
+                                            f"❌ لا يوجد بروكسي حي (حتى الاحتياطي متوقف) — لن يتم الاصطحاب.",
                                             parse_mode="Markdown"
                                         )
                                     except Exception:
@@ -1230,7 +1285,7 @@ def _handle_message_inner(message):
             except Exception:
                 pass
         user_sessions[chat_id] = {'step': 'WAITING_PASSWORD', 'email': text}
-        msg = bot.send_message(chat_id, "🔐 أدخل كلمة المرور:")
+        msg = msg = bot.send_message(chat_id, "🔐 أدخل كلمة المرور:")
         user_transient_messages[chat_id] = msg.message_id
 
 # ==========================================
@@ -1252,8 +1307,7 @@ def run_uptime_server():
 
 def send_crash_alert(reason: str):
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    msg = (f"🚨 *توقف البوت* 🚨\n🕐 الوقت: `{now}`\n"
-           f"❌ السبب:\n```\n{reason[:3000]}\n```")
+    msg = f"🚨 *توقف البوت* 🚨\n🕐 الوقت: `{now}`\n❌ السبب:\n{reason}"
     try:
         requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
