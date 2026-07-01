@@ -129,11 +129,9 @@ def refresh_fallback_proxies():
                         with fallback_lock:
                             if len(working) < 4:
                                 working.append(res)
-                        # التوقف فوراً عند إيجاد 4 بروكسيات لرمي الباقي
                         if len(working) >= 4:
                             break
             
-            # توزيع عادل للبروكسيات الأربعة على الحسابات المستثناة
             with fallback_lock:
                 for i, email in enumerate(EXEMPT_ACCOUNTS):
                     if i < len(working):
@@ -147,55 +145,75 @@ def refresh_fallback_proxies():
         with fallback_lock:
             _is_fetching_fallback = False
 
+def check_single_exempt_proxy(prx):
+    """دالة فرعية لفحص البروكسي الثابت وإرجاع الوقت والـ URL"""
+    check_url = "https://api.ipify.org?format=json"
+    try:
+        if "mnvfoqyw:18kjk2uk8zmh" in prx:
+            parts = prx.split(":")
+            proxy_url = f"http://{parts[2]}:{parts[3]}@{parts[0]}:{parts[1]}"
+        else:
+            proxy_url = f"http://{PROXY_USER}:{PROXY_PASS}@{prx}"
+
+        start = time.time()
+        # تم زيادة وقت المهلة هنا إلى 12 ثانية بناءً على طلبك
+        r = requests.get(check_url, headers=HEADERS,
+                         proxies={"http": proxy_url, "https": proxy_url},
+                         timeout=12)
+        elapsed = time.time() - start
+        if r.status_code == 200:
+            return proxy_url, elapsed
+    except Exception:
+        pass
+    return None, float('inf')
+
 def get_fastest_proxy_exempt(email):
     """
-    يختبر البروكسيات الثابتة ويُرجع الرابط الكامل لأسرع واحدة تعمل.
+    يختبر البروكسيات الثابتة بشكل متوازي وزيادة وقت المهلة.
     إذا فشلت جميعها ← يلجأ فوراً للبروكسي المجاني المخصص للحساب.
     """
     email_lower = email.lower().strip()
     proxies = ACCOUNT_PROXIES.get(email_lower)
-    fastest_url = None
-    best_time = float('inf')
-    check_url = "https://api.ipify.org?format=json"
-
-    # 1. محاولة استخدام البروكسيات الثابتة
+    
+    # 1. فحص البروكسيات الثابتة بشكل متوازي (في نفس الوقت) وزيادة المهلة
     if proxies:
-        for prx in proxies:
-            try:
-                if "mnvfoqyw:18kjk2uk8zmh" in prx:
-                    parts = prx.split(":")
-                    proxy_url = f"http://{parts[2]}:{parts[3]}@{parts[0]}:{parts[1]}"
-                else:
-                    proxy_url = f"http://{PROXY_USER}:{PROXY_PASS}@{prx}"
-
-                start = time.time()
-                r = requests.get(check_url, headers=HEADERS,
-                                 proxies={"http": proxy_url, "https": proxy_url},
-                                 timeout=6)
-                elapsed = time.time() - start
-                if r.status_code == 200 and elapsed < best_time:
-                    best_time = elapsed
-                    fastest_url = proxy_url
-            except Exception:
-                continue
-
-    # إرجاع الثابت إذا كان يعمل
-    if fastest_url:
-        return fastest_url
+        fastest_url = None
+        best_time = float('inf')
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(proxies)) as executor:
+            results = executor.map(check_single_exempt_proxy, proxies)
+            
+        for proxy_url, elapsed in results:
+            if proxy_url and elapsed < best_time:
+                best_time = elapsed
+                fastest_url = proxy_url
+                
+        if fastest_url:
+            return fastest_url
 
     # 2. اللجوء للنظام المجاني إذا ماتت كل البروكسيات الثابتة
     with fallback_lock:
         current_fallback = fallback_proxies.get(email_lower)
     
-    # فحص المجاني الحالي
     if current_fallback and test_single_free_proxy(current_fallback):
         return current_fallback
     
-    # إذا لم يكن هناك بروكسي مجاني صالح، نحدث القائمة
     refresh_fallback_proxies()
     
     with fallback_lock:
         return fallback_proxies.get(email_lower)
+
+def notify_user_no_proxy(chat_id, email):
+    """إرسال تنبيه للمستخدم يفيد بالدخول بدون بروكسي"""
+    try:
+        account_label = email.split("@")[0]
+        msg = f"⚠️ **تنبيه البروكسي**\n\n" \
+              f"👤 الحساب: **{account_label}** (`{email}`)\n" \
+              f"🛑 جميع البروكسيات الثابتة والمجانية ميتة أو معطلة!\n" \
+              f"🔄 **تم تسجيل الدخول مباشرة بدون بروكسي بنجاح.**"
+        bot.send_message(chat_id, msg, parse_mode="Markdown")
+    except Exception as e:
+        print(f"[NOTIFY] خطأ في إرسال تنبيه البروكسي: {e}")
 
 def _session_has_live_proxy(session, email):
     """يتحقق أن الجلسة الحالية تمر عبر بروكسي حي فعلاً قبل الاصطحاب"""
@@ -214,7 +232,7 @@ def _session_has_live_proxy(session, email):
     try:
         r = requests.get("https://api.ipify.org?format=json", headers=HEADERS,
                           proxies={"http": proxy_url, "https": proxy_url},
-                          timeout=6)
+                          timeout=12)
         if r.status_code == 200:
             return True
     except Exception:
@@ -405,7 +423,7 @@ def _safe_get(url, session=None, retries=3, **kwargs):
                 raise
             time.sleep(2 * (i + 1))
 
-def get_authenticated_session(username, password):
+def get_authenticated_session(username, password, chat_id=None):
     email_lower = username.lower().strip()
 
     # جلسة محفوظة
@@ -437,11 +455,13 @@ def get_authenticated_session(username, password):
     sess = requests.Session()
     if email_lower in EXEMPT_ACCOUNTS:
         fast_proxy_url = get_fastest_proxy_exempt(email_lower)
-        if not fast_proxy_url:
-            print(f"[SESSION] ⛔ {email_lower}: رُفض تسجيل الدخول — كل البروكسيات ميتة (الأساسية والمجانية)")
-            return None
-            
-        sess.proxies = {"http": fast_proxy_url, "https": fast_proxy_url}
+        if fast_proxy_url:
+            sess.proxies = {"http": fast_proxy_url, "https": fast_proxy_url}
+        else:
+            # تم تعديل هذا الجزء: الدخول المباشر بدون بروكسي إذا كانت البروكسيات معطلة
+            print(f"[SESSION] ⚠️ {email_lower}: البروكسيات ميتة! جاري الدخول المباشر بدون بروكسي...")
+            if chat_id:
+                threading.Thread(target=notify_user_no_proxy, args=(chat_id, username), daemon=True).start()
 
     login_data = {
         "signin[username]": username,
@@ -450,8 +470,8 @@ def get_authenticated_session(username, password):
         "signin[refer_url]": "@office_initial"
     }
     try:
-        sess.get(BASE_URL, headers=HEADERS, timeout=8)
-        lr = sess.post(LOGIN_URL, data=login_data, headers=HEADERS, timeout=8)
+        sess.get(BASE_URL, headers=HEADERS, timeout=12)
+        lr = sess.post(LOGIN_URL, data=login_data, headers=HEADERS, timeout=12)
         if lr.status_code == 200:
             page_state = detect_page_state(lr.text)
             if page_state == "blocked":
@@ -516,7 +536,7 @@ def fetch_publisher_stats(session):
     return stats
 
 def get_site_data(username, password, chat_id):
-    session = get_authenticated_session(username, password)
+    session = get_authenticated_session(username, password, chat_id)
     if not session:
         return None, "AUTH_FAILED"
     try:
@@ -813,21 +833,8 @@ def _bg_process_one_account_inner(chat_id, email, password, current_time):
                         should_take = ((mode == "GT"  and task_minutes > 120) or
                                        (mode == "GTE" and task_minutes >= 120))
                         if should_take:
-                            session = get_authenticated_session(email, password)
+                            session = get_authenticated_session(email, password, chat_id)
                             if session:
-                                if e in EXEMPT_ACCOUNTS and not _session_has_live_proxy(session, e):
-                                    print(f"[HUNT] ⛔ {e}: رُفض الاصطحاب — لا يوجد بروكسي حي")
-                                    try:
-                                        bot.send_message(
-                                            chat_id,
-                                            f"⛔ **{e.split('@')[0]}**: توقف الاصطحاب\n"
-                                            f"❌ لا يوجد بروكسي حي (حتى الاحتياطي متوقف) — لن يتم الاصطحاب.",
-                                            parse_mode="Markdown"
-                                        )
-                                    except Exception:
-                                        pass
-                                    break
-
                                 success = take_task_via_post(session, target_task['task_page'])
                                 if success:
                                     _bg_last_take[key] = time.time()
@@ -904,7 +911,7 @@ def _handle_callback_inner(call):
                 cached = user_auth_sessions.get(new_email_lower)
             if not cached:
                 threading.Thread(
-                    target=lambda: get_authenticated_session(acc['email'], acc['password']),
+                    target=lambda: get_authenticated_session(acc['email'], acc['password'], chat_id),
                     daemon=True
                 ).start()
             bot.answer_callback_query(call.id)
@@ -1189,7 +1196,7 @@ def _handle_message_inner(message):
             email_lower = email.lower().strip()
 
             status_msg = bot.send_message(chat_id, "⏳ جاري التحقق من الحساب...")
-            session = get_authenticated_session(email, password)
+            session = get_authenticated_session(email, password, chat_id)
             try:
                 bot.delete_message(chat_id, status_msg.message_id)
             except Exception:
