@@ -76,9 +76,12 @@ ACCOUNT_PROXIES = {
         "142.111.67.146:5611", "191.96.254.138:6185"
     ],
     "samsamytff@gmail.com": [
-        "31.58.9.4:6077", "64.137.10.153:5803"
+        "31.58.9.4:6077", "64.137.10.153:5803", "104.239.107.47:5699"
     ]
 }
+
+# ملاحظة: دالة جلب البروكسي ستتعامل مع البروكسي الجديد تلقائياً، ولكن إذا كان البروكسي الجديد 
+# يستخدم بيانات اعتماد (Username/Password) مختلفة عن الثابتة بالأسفل، يرجى الانتباه لتعديل الدالة بالأسفل.
 PROXY_USER = "sjtsjaec"
 PROXY_PASS = "b9veo1agajrv"
 
@@ -273,7 +276,14 @@ def get_fastest_proxy_exempt(email):
     
     for prx in proxies:
         try:
-            proxy_url = f"http://{PROXY_USER}:{PROXY_PASS}@{prx}"
+            # التحقق مما إذا كان البروكسي يحتوي على بيانات الاعتماد مسبقاً من الإضافة الجديدة
+            if "mnvfoqyw:18kjk2uk8zmh" in prx:
+                # فصل الـ IP والبورت عن اليوزر والباس المدمجين
+                parts = prx.split(":")
+                proxy_url = f"http://{parts[2]}:{parts[3]}@{parts[0]}:{parts[1]}"
+            else:
+                proxy_url = f"http://{PROXY_USER}:{PROXY_PASS}@{prx}"
+                
             start = time.time()
             r = requests.get(check_url, headers=HEADERS,
                              proxies={"http": proxy_url, "https": proxy_url},
@@ -368,7 +378,13 @@ def get_authenticated_session(username, password):
         if not fast_proxy:
             print(f"[SESSION] ⛔ {email_lower}: رُفض تسجيل الدخول — كل البروكسيات ميتة")
             return None
-        proxy_url = f"http://{PROXY_USER}:{PROXY_PASS}@{fast_proxy}"
+            
+        if "mnvfoqyw:18kjk2uk8zmh" in fast_proxy:
+            parts = fast_proxy.split(":")
+            proxy_url = f"http://{parts[2]}:{parts[3]}@{parts[0]}:{parts[1]}"
+        else:
+            proxy_url = f"http://{PROXY_USER}:{PROXY_PASS}@{fast_proxy}"
+            
         sess.proxies = {"http": proxy_url, "https": proxy_url}
 
     login_data = {
@@ -647,7 +663,7 @@ def get_auth_menu(chat_id=None):
         for i, acc in enumerate(saved, 1):
             label = acc['email'].split('@')[0]
             markup.add(types.InlineKeyboardButton(
-                f"⚡ الدخول المباشر: الحساب {i} ({label})",
+                f"⚡ הדخول المباشر: الحساب {i} ({label})",
                 callback_data=f"switch_acc_{i-1}"
             ))
     markup.add(types.InlineKeyboardButton(
