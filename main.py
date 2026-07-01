@@ -15,19 +15,16 @@ import sys
 import html as html_module
 
 # ==========================================
-# ⏳ العد التنازلي
+# ⏫ العد التصاعدي
 # ==========================================
 BOT_START_TIME = time.time()
 
 def get_countdown_text() -> str:
     try:
         elapsed = time.time() - BOT_START_TIME
-        remaining = 24 * 3600 - elapsed
-        if remaining <= 0:
-            return "[0mini]"
-        remaining_int = int(remaining)
-        hours = remaining_int // 3600
-        minutes = (remaining_int % 3600) // 60
+        elapsed_int = int(elapsed)
+        hours = elapsed_int // 3600
+        minutes = (elapsed_int % 3600) // 60
         if hours >= 1:
             return f"[{hours}h {minutes}mini]" if minutes > 0 else f"[{hours}h]"
         return f"[{minutes}mini]"
@@ -37,7 +34,7 @@ def get_countdown_text() -> str:
 # ==========================================
 # الإعدادات الأساسية
 # ==========================================
-TELEGRAM_TOKEN = "8988234446:AAHS5psZTFN8sdIbQAZIJBPXg-aQGhLo-qY"
+TELEGRAM_TOKEN = "8897115946:AAHZGrIR64CadeWvqPjoi1shag6ti6yW6yM"
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
 CAPTCHA_ALERT_CHAT_ID = 7638322813
@@ -55,23 +52,19 @@ HEADERS = {
 
 TAKE_COOLDOWN = 60
 
+# نص التنبيه الذي يظهر عندما يكون هناك اصطحاب جارٍ بالفعل من نفس الجهاز
+DUPLICATE_TASK_SIG = "с вашего компьютера задание уже выполняется"
+
 # ==========================================
 # البروكسيات الثابتة للحسابين المستثنيين
+# ملاحظة: بروكسيات france260026@gmail.com و rossxpro26@gmail.com توقفت نهائياً
+# وتم حذفها — هذان الحسابان الآن يُعامَلان كباقي الحسابات (يستخدمان نظام
+# البروكسي الخفيف عند الاصطحاب فقط، بلا أي شرط بروكسي عند تسجيل الدخول).
 # ==========================================
-EXEMPT_ACCOUNTS = ["france260026@gmail.com", "rossxpro26@gmail.com"]
-
-ACCOUNT_PROXIES = {
-    "france260026@gmail.com": [
-        "38.154.203.95:5863", "198.105.121.200:6462", "64.137.96.74:6641",
-        "209.127.138.10:5784", "38.154.185.97:6370"
-    ],
-    "rossxpro26@gmail.com": [
-        "84.247.60.125:6095", "142.111.67.146:5611", "191.96.254.138:6185",
-        "31.58.9.4:6077", "64.137.10.153:5803"
-    ]
-}
-PROXY_USER = "sjtsjaec"
-PROXY_PASS = "b9veo1agajrv"
+EXEMPT_ACCOUNTS = []
+ACCOUNT_PROXIES = {}
+PROXY_USER = ""
+PROXY_PASS = ""
 
 # ==========================================
 # التخزين المحلي (بدون سحابة)
@@ -159,6 +152,25 @@ def register_account_in_active(chat_id, email, password):
         active_accounts[chat_id][email.lower().strip()] = {
             'email': email, 'password': password
         }
+
+# ==========================================
+# 📢 تنبيه المهمة المكررة (يُرسل لك أنت فقط)
+# ==========================================
+def notify_duplicate_task_in_progress(email, task_page_url=None):
+    """يُرسل تنبيهاً إليك فقط (7638322813) عند ظهور رسالة 'المهمة قيد التنفيذ بالفعل من هذا الجهاز'."""
+    account_label = (email or "").split("@")[0] if email else "غير معروف"
+    alert_text = (
+        f"⚠️ **تنبيه: محاولة اصطحاب مكرر**\n\n"
+        f"👤 الحساب: **{account_label}**\n"
+        f"📌 السبب: الموقع أفاد أن هناك مهمة قيد التنفيذ بالفعل من هذا الجهاز.\n"
+        f"❌ لم يتم اصطحاب المهمة."
+    )
+    if task_page_url:
+        alert_text += f"\n🔗 رابط المهمة: {task_page_url}"
+    try:
+        bot.send_message(CAPTCHA_ALERT_CHAT_ID, alert_text, parse_mode="Markdown")
+    except Exception as ex:
+        print(f"[DUPLICATE-TASK-ALERT] فشل الإرسال: {ex}")
 
 # ==========================================
 # 🚨 كشف الحظر والـ CAPTCHA
@@ -306,6 +318,101 @@ def _session_has_live_proxy(session, email):
     except Exception as ex:
         print(f"[PROXY-CHECK] ⛔ {email_lower}: البروكسي ميت — {ex}")
     return False
+
+# ==========================================
+# 🌐 بروكسي خفيف عند الاصطحاب فقط (بروكسي واحد سريع — بدون تجمّع أو تحديث دوري)
+# الفكرة: عند لحظة اصطحاب المهمة فقط، نجلب بروكسي واحد سريع ونتصل فيه،
+# بلا أي مخزن احتياطي وبلا أي خيط خلفي يشتغل باستمرار.
+# ==========================================
+PROXY_SOURCE_URL = "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=protocolipport&format=text"
+QUICK_PROXY_LIST_TTL = 300  # نعيد تحميل القائمة الخام كل 5 دقائق بدل كل اصطحاب (تخفيف الحمل)
+
+_quick_proxy_raw_cache = {"list": [], "fetched_at": 0}
+_quick_proxy_cache_lock = threading.Lock()
+
+def _fetch_raw_proxy_list():
+    """جلب قائمة بروكسيات خام من المصدر — بدون اختبار، فقط جلب النصوص."""
+    try:
+        r = requests.get(PROXY_SOURCE_URL, timeout=10)
+        if r.status_code == 200:
+            lines = [l.strip() for l in r.text.strip().split("\n") if l.strip()]
+            proxies = [l if "://" in l else f"http://{l}" for l in lines]
+            random.shuffle(proxies)
+            return proxies
+    except Exception as e:
+        print(f"[QUICK-PROXY] خطأ في جلب القائمة: {e}")
+    return []
+
+def _get_raw_proxy_candidates():
+    """يرجع مرشحين من كاش قصير المدة (5 دقائق) لتفادي تحميل القائمة الكاملة بكل اصطحاب."""
+    with _quick_proxy_cache_lock:
+        age = time.time() - _quick_proxy_raw_cache["fetched_at"]
+        if not _quick_proxy_raw_cache["list"] or age > QUICK_PROXY_LIST_TTL:
+            fresh = _fetch_raw_proxy_list()
+            if fresh:
+                _quick_proxy_raw_cache["list"] = fresh
+                _quick_proxy_raw_cache["fetched_at"] = time.time()
+        return list(_quick_proxy_raw_cache["list"])
+
+def get_quick_proxy(max_attempts=5, timeout=4, avoid_for_task_id=None):
+    """
+    يجلب بروكسي واحد فقط بسرعة: يجرب عدد محدود من المرشحين ويرجع أول واحد شغال.
+    إذا مُرِّر avoid_for_task_id، يتخطى أي بروكسي سبق واستُخدم لاصطحاب نفس المهمة
+    (حتى لو من حساب مختلف) — لتفادي اصطحاب نفس المهمة مرتين عبر نفس البروكسي.
+    لا يبني تجمعاً، لا يشتغل بالخلفية، ولا يختبر القائمة كاملة — سريع وخفيف.
+    """
+    candidates = _get_raw_proxy_candidates()
+    if not candidates:
+        return None
+    tried = 0
+    for proxy_url in candidates:
+        if tried >= max_attempts:
+            break
+        if avoid_for_task_id and is_task_proxy_used(avoid_for_task_id, proxy_url):
+            print(f"[QUICK-PROXY] ⏭️ تخطي {proxy_url} — مستخدم أصلاً لنفس المهمة {avoid_for_task_id}")
+            continue
+        tried += 1
+        try:
+            start = time.time()
+            r = requests.head(BASE_URL, headers=HEADERS,
+                              proxies={"http": proxy_url, "https": proxy_url},
+                              timeout=timeout)
+            if r.status_code < 500:
+                elapsed = round(time.time() - start, 2)
+                print(f"[QUICK-PROXY] ✅ بروكسي شغال: {proxy_url} ({elapsed}s)")
+                return proxy_url
+        except Exception:
+            continue
+    print("[QUICK-PROXY] ⛔ لم يتم إيجاد بروكسي شغال (أو غير مستخدم لنفس المهمة) بين المحاولات")
+    return None
+
+# ==========================================
+# 🧾 سجل (مهمة + بروكسي) — لمنع اصطحاب نفس المهمة مرتين عبر نفس البروكسي
+# مخزّن بالذاكرة فقط. المفتاح: (task_id, proxy_url) → لا علاقة له بالحساب،
+# لأن المنع مطلوب حتى لو حاول حساب مختلف الاصطحاب.
+# ==========================================
+_task_proxy_log = {}   # {(task_id, proxy_url): {"email":.., "time":..}}
+_task_proxy_log_lock = threading.Lock()
+_TASK_PROXY_LOG_TTL = 24 * 3600  # تنظيف السجلات الأقدم من 24 ساعة تلقائياً
+
+def is_task_proxy_used(task_id, proxy_url):
+    """يتحقق إذا كانت نفس المهمة (task_id) اصطُحبت سابقاً عبر نفس البروكسي بالضبط."""
+    if not task_id or not proxy_url:
+        return False
+    with _task_proxy_log_lock:
+        return (task_id, proxy_url) in _task_proxy_log
+
+def log_task_proxy_usage(task_id, proxy_url, email):
+    """يسجل أن المهمة task_id تم اصطحابها عبر proxy_url من قبل الحساب email."""
+    if not task_id or not proxy_url:
+        return
+    with _task_proxy_log_lock:
+        _task_proxy_log[(task_id, proxy_url)] = {"email": email, "time": time.time()}
+        # تنظيف خفيف: فقط إذا كبر السجل، نحذف القديم منه
+        if len(_task_proxy_log) > 500:
+            cutoff = time.time() - _TASK_PROXY_LOG_TTL
+            for k in [k for k, v in _task_proxy_log.items() if v["time"] < cutoff]:
+                _task_proxy_log.pop(k, None)
 
 # ==========================================
 # إنشاء الجلسات
@@ -566,18 +673,33 @@ def get_site_data(username, password, chat_id):
         return None, "ERROR"
 
 
-def take_task_via_post(session, task_page_url):
+def take_task_via_post(session, task_page_url, email=None):
     """
     اصطحاب مهمة مع التحقق الحقيقي من نجاح الاصطحاب عبر order_id.
+    إذا كان الحساب غير مستثنى (بلا بروكسي ثابت)، نجلب بروكسياً واحداً سريعاً
+    ونستخدمه فقط لطلبات هذا الاصطحاب، دون التأثير على باقي الجلسة.
+    كما نتجنب استخدام أي بروكسي سبق واصطحب نفس المهمة (حتى من حساب آخر).
     """
+    email_lower = (email or "").strip().lower()
+    original_proxies = getattr(session, "proxies", None)
+    temp_proxy_applied = False
+    quick_proxy_used = None
+
+    # استخراج order_id للتحقق ولمنع تكرار الاصطحاب عبر نفس البروكسي
+    order_id_for_verify = None
+    id_match = re.search(r"/order[_/](\d+)", task_page_url)
+    if not id_match:
+        id_match = re.search(r"/(\d+)/?(?:\?|$)", task_page_url)
+    if id_match:
+        order_id_for_verify = id_match.group(1)
+
     try:
-        # استخراج order_id للتحقق
-        order_id_for_verify = None
-        id_match = re.search(r"/order[_/](\d+)", task_page_url)
-        if not id_match:
-            id_match = re.search(r"/(\d+)/?(?:\?|$)", task_page_url)
-        if id_match:
-            order_id_for_verify = id_match.group(1)
+        if email_lower and email_lower not in EXEMPT_ACCOUNTS:
+            quick_proxy = get_quick_proxy(avoid_for_task_id=order_id_for_verify)
+            if quick_proxy:
+                session.proxies = {"http": quick_proxy, "https": quick_proxy}
+                temp_proxy_applied = True
+                quick_proxy_used = quick_proxy
 
         response = session.get(task_page_url, headers=HEADERS, timeout=10)
         if response.status_code != 200:
@@ -585,11 +707,16 @@ def take_task_via_post(session, task_page_url):
 
         soup = BeautifulSoup(response.text, "html.parser")
         page_text = soup.get_text()
+        page_text_lower = page_text.lower()
+
+        if DUPLICATE_TASK_SIG in page_text_lower:
+            notify_duplicate_task_in_progress(email_lower, task_page_url)
+            return False
 
         not_available = ["нет заданий", "no tasks", "задание недоступно",
                          "order not found", "not found", "404"]
         for sig in not_available:
-            if sig in page_text.lower():
+            if sig in page_text_lower:
                 return False
 
         form = soup.find("form", action=re.compile(r"batch|order_request"))
@@ -619,21 +746,24 @@ def take_task_via_post(session, task_page_url):
         if res.status_code != 200:
             return False
 
-        time.sleep(1.5)
-        confirmed_r = session.get(CONFIRMED_URL, headers=HEADERS, timeout=10)
-        if confirmed_r.status_code == 200:
-            confirmed_soup = BeautifulSoup(confirmed_r.text, "html.parser")
-            table = confirmed_soup.find("table", id="publisher-requests")
-            if table:
-                rows = table.find_all("tr")
-                if rows and len(rows) > 1:
-                    if order_id_for_verify:
-                        return order_id_for_verify in confirmed_r.text
-                    data_rows = [r for r in rows if r.find_all("td")]
-                    return len(data_rows) > 0
-        return False
+        if DUPLICATE_TASK_SIG in res.text.lower():
+            notify_duplicate_task_in_progress(email_lower, task_page_url)
+            return False
+
+        # التحقق من نجاح الاصطحاب يعتمد فقط على كود حالة رد الموقع لطلب POST نفسه
+        # (بدون فحص أي صفحة/جدول آخر مثل CONFIRMED_URL)
+        success = res.status_code == 200
+
+        if success and quick_proxy_used and order_id_for_verify:
+            log_task_proxy_usage(order_id_for_verify, quick_proxy_used, email_lower)
+            print(f"[TASK-PROXY-LOG] 📝 مهمة {order_id_for_verify} ← بروكسي {quick_proxy_used} ← {email_lower}")
+
+        return success
     except Exception:
         return False
+    finally:
+        if temp_proxy_applied:
+            session.proxies = original_proxies or {}
 
 # ==========================================
 # 🔥 الواجهات
@@ -756,7 +886,7 @@ def _bg_process_one_account_inner(chat_id, email, password, current_time):
                                         pass
                                     break  # لا نُكمل ولا نجرب مهام أخرى
 
-                                success = take_task_via_post(session, target_task['task_page'])
+                                success = take_task_via_post(session, target_task['task_page'], email=e)
                                 if success:
                                     _bg_last_take[key] = time.time()
                                     try:
