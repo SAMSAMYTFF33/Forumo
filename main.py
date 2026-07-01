@@ -55,12 +55,9 @@ TAKE_COOLDOWN = 60
 # نص التنبيه الذي يظهر عندما يكون هناك اصطحاب جارٍ بالفعل من نفس الجهاز
 DUPLICATE_TASK_SIG = "с вашего компьютера задание уже выполняется"
 
-# ==========================================
-# البروكسيات الثابتة للحسابين المستثنيين
-# ملاحظة: بروكسيات france260026@gmail.com و rossxpro26@gmail.com توقفت نهائياً
-# وتم حذفها — هذان الحسابان الآن يُعامَلان كباقي الحسابات (يستخدمان نظام
-# البروكسي الخفيف عند الاصطحاب فقط، بلا أي شرط بروكسي عند تسجيل الدخول).
-# ==========================================
+# الحساب المستثنى تماماً من البروكسيات (يعمل بالـ IP الأصلي)
+DIRECT_IP_ACCOUNT = "miricanmoroco@gmail.com"
+
 EXEMPT_ACCOUNTS = []
 ACCOUNT_PROXIES = {}
 PROXY_USER = ""
@@ -154,10 +151,9 @@ def register_account_in_active(chat_id, email, password):
         }
 
 # ==========================================
-# 📢 تنبيه المهمة المكررة (يُرسل لك أنت فقط)
+# 📢 تنبيه المهمة المكررة
 # ==========================================
 def notify_duplicate_task_in_progress(email, task_page_url=None):
-    """يُرسل تنبيهاً إليك فقط (7638322813) عند ظهور رسالة 'المهمة قيد التنفيذ بالفعل من هذا الجهاز'."""
     account_label = (email or "").split("@")[0] if email else "غير معروف"
     alert_text = (
         f"⚠️ **تنبيه: محاولة اصطحاب مكرر**\n\n"
@@ -223,9 +219,9 @@ def handle_blocked_account(email, chat_id_origin=None):
                     active_accounts[cid].pop(email_lower, None)
             delete_multi_account(cid, email_lower)
             with logged_out_lock:
-                if cid not in logged_out_accounts:
-                    logged_out_accounts[cid] = set()
-                logged_out_accounts[cid].add(email_lower)
+                if chat_id_origin not in logged_out_accounts:
+                    logged_out_accounts[chat_id_origin] = set()
+                logged_out_accounts[chat_id_origin].add(email_lower)
             active_email = user_data_store.get(cid, {}).get("email", "").lower().strip()
             if active_email == email_lower:
                 for store in [user_data_store, user_sessions, user_numbered_tasks,
@@ -259,79 +255,15 @@ def handle_captcha_detected(email, context=""):
         pass
 
 # ==========================================
-# البروكسيات للحسابين المستثنيين
-# ==========================================
-def get_fastest_proxy_exempt(email):
-    """
-    يختبر البروكسيات الثابتة ويُرجع أسرع واحدة تعمل فعلاً.
-    إذا فشلت جميعها → يُرجع None (لا يُعيد بروكسياً ميتاً أبداً).
-    """
-    proxies = ACCOUNT_PROXIES.get(email.lower().strip())
-    if not proxies:
-        return None
-    fastest = None
-    best_time = float('inf')
-    for prx in proxies:
-        try:
-            proxy_url = f"http://{PROXY_USER}:{PROXY_PASS}@{prx}"
-            start = time.time()
-            r = requests.head(BASE_URL, headers=HEADERS,
-                              proxies={"http": proxy_url, "https": proxy_url},
-                              timeout=4)
-            elapsed = time.time() - start
-            if r.status_code < 500 and elapsed < best_time:
-                best_time = elapsed
-                fastest = prx
-        except Exception:
-            continue
-    # لا نُرجع بروكسياً عشوائياً — إذا كلها ميتة نُرجع None
-    return fastest
-
-
-def _session_has_live_proxy(session, email):
-    """
-    يتحقق أن الجلسة الحالية تمر عبر بروكسي حي فعلاً.
-    يُستخدم قبل كل اصطحاب للحسابين المستثنيين.
-    يُرجع True إذا البروكسي يعمل، False إذا لا يوجد بروكسي أو ميت.
-    """
-    email_lower = email.lower().strip()
-    if email_lower not in EXEMPT_ACCOUNTS:
-        return True  # الحسابات الأخرى لا تُطبّق عليها هذا الشرط
-
-    proxy_dict = getattr(session, 'proxies', {})
-    if not proxy_dict:
-        print(f"[PROXY-CHECK] ⛔ {email_lower}: لا يوجد بروكسي في الجلسة")
-        return False
-
-    proxy_url = proxy_dict.get("http") or proxy_dict.get("https")
-    if not proxy_url:
-        print(f"[PROXY-CHECK] ⛔ {email_lower}: proxies فارغ")
-        return False
-
-    try:
-        r = requests.head(BASE_URL, headers=HEADERS,
-                          proxies={"http": proxy_url, "https": proxy_url},
-                          timeout=5)
-        if r.status_code < 500:
-            print(f"[PROXY-CHECK] ✅ {email_lower}: البروكسي حي")
-            return True
-    except Exception as ex:
-        print(f"[PROXY-CHECK] ⛔ {email_lower}: البروكسي ميت — {ex}")
-    return False
-
-# ==========================================
-# 🌐 بروكسي خفيف عند الاصطحاب فقط (بروكسي واحد سريع — بدون تجمّع أو تحديث دوري)
-# الفكرة: عند لحظة اصطحاب المهمة فقط، نجلب بروكسي واحد سريع ونتصل فيه،
-# بلا أي مخزن احتياطي وبلا أي خيط خلفي يشتغل باستمرار.
+# 🌐 نظام البروكسي الخفيف المتوازي الذكي
 # ==========================================
 PROXY_SOURCE_URL = "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=protocolipport&format=text"
-QUICK_PROXY_LIST_TTL = 300  # نعيد تحميل القائمة الخام كل 5 دقائق بدل كل اصطحاب (تخفيف الحمل)
+QUICK_PROXY_LIST_TTL = 300  
 
 _quick_proxy_raw_cache = {"list": [], "fetched_at": 0}
 _quick_proxy_cache_lock = threading.Lock()
 
 def _fetch_raw_proxy_list():
-    """جلب قائمة بروكسيات خام من المصدر — بدون اختبار، فقط جلب النصوص."""
     try:
         r = requests.get(PROXY_SOURCE_URL, timeout=10)
         if r.status_code == 200:
@@ -343,72 +275,84 @@ def _fetch_raw_proxy_list():
         print(f"[QUICK-PROXY] خطأ في جلب القائمة: {e}")
     return []
 
-def _get_raw_proxy_candidates():
-    """يرجع مرشحين من كاش قصير المدة (5 دقائق) لتفادي تحميل القائمة الكاملة بكل اصطحاب."""
+def _get_raw_proxy_candidates(force_fresh=False):
     with _quick_proxy_cache_lock:
         age = time.time() - _quick_proxy_raw_cache["fetched_at"]
-        if not _quick_proxy_raw_cache["list"] or age > QUICK_PROXY_LIST_TTL:
+        if not _quick_proxy_raw_cache["list"] or age > QUICK_PROXY_LIST_TTL or force_fresh:
             fresh = _fetch_raw_proxy_list()
             if fresh:
                 _quick_proxy_raw_cache["list"] = fresh
                 _quick_proxy_raw_cache["fetched_at"] = time.time()
         return list(_quick_proxy_raw_cache["list"])
 
-def get_quick_proxy(max_attempts=5, timeout=4, avoid_for_task_id=None):
+def _check_single_proxy_worker(proxy_url, timeout=3):
+    try:
+        r = requests.head(BASE_URL, headers=HEADERS,
+                          proxies={"http": proxy_url, "https": proxy_url},
+                          timeout=timeout)
+        if r.status_code < 500:
+            return proxy_url
+    except Exception:
+        pass
+    return None
+
+def get_quick_proxy_parallel(avoid_for_task_id=None, force_fresh_list=False):
     """
-    يجلب بروكسي واحد فقط بسرعة: يجرب عدد محدود من المرشحين ويرجع أول واحد شغال.
-    إذا مُرِّر avoid_for_task_id، يتخطى أي بروكسي سبق واستُخدم لاصطحاب نفس المهمة
-    (حتى لو من حساب مختلف) — لتفادي اصطحاب نفس المهمة مرتين عبر نفس البروكسي.
-    لا يبني تجمعاً، لا يشتغل بالخلفية، ولا يختبر القائمة كاملة — سريع وخفيف.
+    يقوم بالفحص بالتوازي لحماية الاستضافة المجانية من الضغط:
+    يطلق 25 خيطاً للدفعة الأولى، وإذا فشلت يطلق الدفعة الثانية بـ 25 خيطاً آخرين.
+    بمجرد العثور على بروكسي شغال، يتم قطع وتجاهل باقي الفحوصات فوراً لتوفير موارد الـ CPU.
     """
-    candidates = _get_raw_proxy_candidates()
+    candidates = _get_raw_proxy_candidates(force_fresh=force_fresh_list)
     if not candidates:
         return None
-    tried = 0
-    for proxy_url in candidates:
-        if tried >= max_attempts:
-            break
-        if avoid_for_task_id and is_task_proxy_used(avoid_for_task_id, proxy_url):
-            print(f"[QUICK-PROXY] ⏭️ تخطي {proxy_url} — مستخدم أصلاً لنفس المهمة {avoid_for_task_id}")
+
+    # تصفية البروكسيات المستخدمة مسبقاً لهذه المهمة
+    filtered_candidates = []
+    for p in candidates:
+        if avoid_for_task_id and is_task_proxy_used(avoid_for_task_id, p):
             continue
-        tried += 1
-        try:
-            start = time.time()
-            r = requests.head(BASE_URL, headers=HEADERS,
-                              proxies={"http": proxy_url, "https": proxy_url},
-                              timeout=timeout)
-            if r.status_code < 500:
-                elapsed = round(time.time() - start, 2)
-                print(f"[QUICK-PROXY] ✅ بروكسي شغال: {proxy_url} ({elapsed}s)")
-                return proxy_url
-        except Exception:
-            continue
-    print("[QUICK-PROXY] ⛔ لم يتم إيجاد بروكسي شغال (أو غير مستخدم لنفس المهمة) بين المحاولات")
+        filtered_candidates.append(p)
+
+    if not filtered_candidates:
+        return None
+
+    # تقسيم الـ 50 بروكسي المرشحين إلى دفعتين (كل دفعة 25)
+    pool_size = 25
+    batches = [filtered_candidates[i:i + pool_size] for i in range(0, min(50, len(filtered_candidates)), pool_size)]
+
+    for b_idx, batch in enumerate(batches):
+        print(f"[PARALLEL-PROXY] جاري إطلاق الدفعة رقم {b_idx + 1} وتضم {len(batch)} خيط فحص متوازي...")
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(batch)) as executor:
+            futures = {executor.submit(_check_single_proxy_worker, proxy, timeout=3.5): proxy for proxy in batch}
+            
+            for future in concurrent.futures.as_completed(futures):
+                found_proxy = future.result()
+                if found_proxy:
+                    print(f"[PARALLEL-PROXY] ✅ نجح الفحص المتوازي! تم العثور على: {found_proxy}")
+                    return found_proxy
+
+    print("[PARALLEL-PROXY] ❌ تم فحص 50 بروكسي بالكامل على دُفعتين ولم ينجح أي منها.")
     return None
 
 # ==========================================
-# 🧾 سجل (مهمة + بروكسي) — لمنع اصطحاب نفس المهمة مرتين عبر نفس البروكسي
-# مخزّن بالذاكرة فقط. المفتاح: (task_id, proxy_url) → لا علاقة له بالحساب،
-# لأن المنع مطلوب حتى لو حاول حساب مختلف الاصطحاب.
+# سجل (مهمة + بروكسي)
 # ==========================================
-_task_proxy_log = {}   # {(task_id, proxy_url): {"email":.., "time":..}}
+_task_proxy_log = {}   
 _task_proxy_log_lock = threading.Lock()
-_TASK_PROXY_LOG_TTL = 24 * 3600  # تنظيف السجلات الأقدم من 24 ساعة تلقائياً
+_TASK_PROXY_LOG_TTL = 24 * 3600  
 
 def is_task_proxy_used(task_id, proxy_url):
-    """يتحقق إذا كانت نفس المهمة (task_id) اصطُحبت سابقاً عبر نفس البروكسي بالضبط."""
     if not task_id or not proxy_url:
         return False
     with _task_proxy_log_lock:
         return (task_id, proxy_url) in _task_proxy_log
 
 def log_task_proxy_usage(task_id, proxy_url, email):
-    """يسجل أن المهمة task_id تم اصطحابها عبر proxy_url من قبل الحساب email."""
     if not task_id or not proxy_url:
         return
     with _task_proxy_log_lock:
         _task_proxy_log[(task_id, proxy_url)] = {"email": email, "time": time.time()}
-        # تنظيف خفيف: فقط إذا كبر السجل، نحذف القديم منه
         if len(_task_proxy_log) > 500:
             cutoff = time.time() - _TASK_PROXY_LOG_TTL
             for k in [k for k, v in _task_proxy_log.items() if v["time"] < cutoff]:
@@ -431,7 +375,6 @@ def _safe_get(url, session=None, retries=3, **kwargs):
 def get_authenticated_session(username, password):
     email_lower = username.lower().strip()
 
-    # جلسة محفوظة
     with auth_sessions_lock:
         cached = user_auth_sessions.get(email_lower)
     if cached:
@@ -456,16 +399,17 @@ def get_authenticated_session(username, password):
         with auth_sessions_lock:
             user_auth_sessions.pop(email_lower, None)
 
-    # تسجيل دخول جديد
+    # تسجيل دخول جديد بنظام البروكسي المتوازي
     sess = requests.Session()
-    if email_lower in EXEMPT_ACCOUNTS:
-        fast_proxy = get_fastest_proxy_exempt(email_lower)
-        if not fast_proxy:
-            # شرط صارم: لا دخول بدون بروكسي حي
-            print(f"[SESSION] ⛔ {email_lower}: رُفض تسجيل الدخول — كل البروكسيات ميتة")
+    
+    if email_lower != DIRECT_IP_ACCOUNT:
+        quick_proxy = get_quick_proxy_parallel()
+        if not quick_proxy:
+            print(f"[SESSION] ⛔ {email_lower}: رُفض الدخول — لم تنجح الـ 50 محاولة فحص متوازية.")
             return None
-        proxy_url = f"http://{PROXY_USER}:{PROXY_PASS}@{fast_proxy}"
-        sess.proxies = {"http": proxy_url, "https": proxy_url}
+        sess.proxies = {"http": quick_proxy, "https": quick_proxy}
+    else:
+        print(f"[SESSION] 🌐 {email_lower} يسجل الدخول عبر الـ IP الأصلي مباشرة (مستثنى).")
 
     login_data = {
         "signin[username]": username,
@@ -540,10 +484,6 @@ def fetch_publisher_stats(session):
     return stats
 
 def get_site_data(username, password, chat_id):
-    """
-    جلب المهام الصالحة فقط (التي تملك زر اصطحاب حقيقي).
-    يفرز taken-list و gray-list تلقائياً.
-    """
     session = get_authenticated_session(username, password)
     if not session:
         return None, "AUTH_FAILED"
@@ -594,7 +534,6 @@ def get_site_data(username, password, chat_id):
                     if len(cells) < 9:
                         continue
 
-                    # فرز الصلاحية: يجب وجود زر اصطحاب فعلي
                     action_cell = cells[-1]
                     take_link = action_cell.find("a", href=True)
                     if not take_link or action_cell.find("img", alt="take") is None:
@@ -672,49 +611,52 @@ def get_site_data(username, password, chat_id):
     except Exception:
         return None, "ERROR"
 
-
 def take_task_via_post(session, task_page_url, email=None):
     """
-    اصطحاب مهمة مع التحقق الحقيقي من نجاح الاصطحاب عبر order_id.
-    إذا كان الحساب غير مستثنى (بلا بروكسي ثابت)، نجلب بروكسياً واحداً سريعاً
-    ونستخدمه فقط لطلبات هذا الاصطحاب، دون التأثير على باقي الجلسة.
-    كما نتجنب استخدام أي بروكسي سبق واصطحب نفس المهمة (حتى من حساب آخر).
+    تعديل حتمي: إذا فشل فحص 50 بروكسي، لا يتم إلغاء العملية أبداً!
+    يدخل البوت في حلقة تكرارية لانهائية لجلب قائمة جديدة وفحصها بالتوازي حتى يجد بروكسي شغال.
+    الحساب miricanmoroco@gmail.com مستثنى ويعمل مباشرة بدون بروكسي.
     """
     email_lower = (email or "").strip().lower()
     original_proxies = getattr(session, "proxies", None)
-    temp_proxy_applied = False
     quick_proxy_used = None
 
-    # استخراج order_id للتحقق ولمنع تكرار الاصطحاب عبر نفس البروكسي
-    order_id_for_verify = None
-    id_match = re.search(r"/order[_/](\d+)", task_page_url)
-    if not id_match:
-        id_match = re.search(r"/(\d+)/?(?:\?|$)", task_page_url)
-    if id_match:
-        order_id_for_verify = id_match.group(1)
+    id_match = re.search(r"/order[_/](\d+)", task_page_url) or re.search(r"/(\d+)/?(?:\?|$)", task_page_url)
+    order_id_for_verify = id_match.group(1) if id_match else None
 
     try:
-        if email_lower and email_lower not in EXEMPT_ACCOUNTS:
-            quick_proxy = get_quick_proxy(avoid_for_task_id=order_id_for_verify)
-            if quick_proxy:
-                session.proxies = {"http": quick_proxy, "https": quick_proxy}
-                temp_proxy_applied = True
-                quick_proxy_used = quick_proxy
+        if email_lower != DIRECT_IP_ACCOUNT:
+            print(f"[TAKE-TASK] 🔄 البدء في البحث عن بروكسي شغال للحساب: {email_lower}")
+            
+            force_refresh = False
+            # حلقة تكرارية لانهائية حتى العثور على بروكسي شغال
+            while True:
+                quick_proxy = get_quick_proxy_parallel(avoid_for_task_id=order_id_for_verify, force_fresh_list=force_refresh)
+                if quick_proxy:
+                    session.proxies = {"http": quick_proxy, "https": quick_proxy}
+                    quick_proxy_used = quick_proxy
+                    break # وجدنا بروكسي شغال، نخرج من الحلقة ونكمل الاصطحاب
+                
+                print(f"[TAKE-TASK] ⚠️ لم ينجح أي بروكسي من الـ 50 الحاليين للحساب {email_lower}. جاري جلب قائمة جديدة كلياً وإعادة الفحص...")
+                force_refresh = True # إجبار النظام على تخطي الكاش وجلب قائمة جديدة في الدورة القادمة
+                time.sleep(3) # انتظار خفيف لحماية المعالج ومنع التكرار السريع جداً
+        else:
+            session.proxies = {}
+            print(f"[TAKE-TASK] 🌐 الحساب {email_lower} يعمل مباشرة عبر الـ IP الأصلي.")
 
-        response = session.get(task_page_url, headers=HEADERS, timeout=10)
+        # تنفيذ الـ GET والـ POST تحت البروكسي الشغال الذي تم إيجاده حتماً
+        response = session.get(task_page_url, headers=HEADERS, timeout=12)
         if response.status_code != 200:
             return False
 
         soup = BeautifulSoup(response.text, "html.parser")
-        page_text = soup.get_text()
-        page_text_lower = page_text.lower()
+        page_text_lower = soup.get_text().lower()
 
         if DUPLICATE_TASK_SIG in page_text_lower:
             notify_duplicate_task_in_progress(email_lower, task_page_url)
             return False
 
-        not_available = ["нет заданий", "no tasks", "задание недоступно",
-                         "order not found", "not found", "404"]
+        not_available = ["нет заданий", "no tasks", "задание недоступно", "order not found", "not found", "404"]
         for sig in not_available:
             if sig in page_text_lower:
                 return False
@@ -742,7 +684,7 @@ def take_task_via_post(session, task_page_url, email=None):
         else:
             return False
 
-        res = session.post(post_action_url, data=post_data, headers=HEADERS, timeout=10)
+        res = session.post(post_action_url, data=post_data, headers=HEADERS, timeout=12)
         if res.status_code != 200:
             return False
 
@@ -750,8 +692,6 @@ def take_task_via_post(session, task_page_url, email=None):
             notify_duplicate_task_in_progress(email_lower, task_page_url)
             return False
 
-        # التحقق من نجاح الاصطحاب يعتمد فقط على كود حالة رد الموقع لطلب POST نفسه
-        # (بدون فحص أي صفحة/جدول آخر مثل CONFIRMED_URL)
         success = res.status_code == 200
 
         if success and quick_proxy_used and order_id_for_verify:
@@ -762,7 +702,7 @@ def take_task_via_post(session, task_page_url, email=None):
     except Exception:
         return False
     finally:
-        if temp_proxy_applied:
+        if email_lower != DIRECT_IP_ACCOUNT:
             session.proxies = original_proxies or {}
 
 # ==========================================
@@ -872,20 +812,6 @@ def _bg_process_one_account_inner(chat_id, email, password, current_time):
                         if should_take:
                             session = get_authenticated_session(email, password)
                             if session:
-                                # ── شرط صارم: الحسابان المستثنيان لا يصطحبان بدون بروكسي ──
-                                if e in EXEMPT_ACCOUNTS and not _session_has_live_proxy(session, e):
-                                    print(f"[HUNT] ⛔ {e}: رُفض الاصطحاب — لا يوجد بروكسي حي")
-                                    try:
-                                        bot.send_message(
-                                            chat_id,
-                                            f"⛔ **{e.split('@')[0]}**: توقف الاصطحاب\n"
-                                            f"❌ لا يوجد بروكسي حي — لن يتم الاصطحاب حتى يعود البروكسي.",
-                                            parse_mode="Markdown"
-                                        )
-                                    except Exception:
-                                        pass
-                                    break  # لا نُكمل ولا نجرب مهام أخرى
-
                                 success = take_task_via_post(session, target_task['task_page'], email=e)
                                 if success:
                                     _bg_last_take[key] = time.time()
@@ -934,17 +860,15 @@ def handle_all_inline_callbacks(call):
             pass
 
 def _handle_callback_inner(call):
-    chat_id    = call.message.chat.id
-    data       = call.data
+    chat_id = call.message.chat.id
+    data = call.data
     message_id = call.message.message_id
 
-    # إلغاء أي انتظار
     if chat_id in user_sessions:
         step = user_sessions[chat_id].get('step', '')
         if step in ['WAITING_EMAIL', 'WAITING_PASSWORD', 'WAITING_DELETE_ACCOUNT']:
             del user_sessions[chat_id]
 
-    # ── تبديل الحساب ──
     if data.startswith("switch_acc_"):
         idx  = int(data.replace("switch_acc_", ""))
         saved = get_saved_multi_accounts(chat_id)
@@ -1393,7 +1317,7 @@ def watchdog_thread():
 # 🚀 نقطة الانطلاق
 # ==========================================
 if __name__ == "__main__":
-    print("🚀 تشغيل البوت...")
+    print("🚀 تشغيل البوت بنظام فحص البروكسي المتوازي...")
 
     t_worker = threading.Thread(target=global_background_worker, daemon=True)
     t_worker.start()
@@ -1404,7 +1328,7 @@ if __name__ == "__main__":
     t_watchdog = threading.Thread(target=watchdog_thread, daemon=True)
     t_watchdog.start()
 
-    print("✅ البوت يعمل الآن...")
+    print("✅ البوت يعمل الآن بكفاءة وبأمان على الاستضافة...")
     consecutive_errors = 0
 
     while True:
