@@ -1,7 +1,3 @@
-
-
-
-
 import time
 import requests
 import random
@@ -318,19 +314,6 @@ def sync_email_settings_to_chat(chat_id, email):
     e = email.lower().strip()
     auto_hunt_status[chat_id] = acct_auto_hunt_status.get(e, False)
     hunt_mode[chat_id]        = acct_hunt_mode.get(e, 'GTE')
-
-def sync_chat_settings_to_all_accounts(chat_id):
-    """
-    يطبّق إعداد اصطحاب المهام (auto_hunt_status / hunt_mode) الحالي لـ chat_id
-    على كل الحسابات المحفوظة لنفس المستخدم دفعة واحدة، وليس فقط الحساب النشط.
-    """
-    active = auto_hunt_status.get(chat_id, False)
-    mode   = hunt_mode.get(chat_id, 'GTE')
-    saved  = get_saved_multi_accounts(chat_id)
-    for acc in saved:
-        e = acc['email'].lower().strip()
-        acct_auto_hunt_status[e] = active
-        acct_hunt_mode[e]        = mode
 
 def register_account_in_active(chat_id, email, password):
     with active_accounts_lock:
@@ -755,7 +738,7 @@ def get_auth_menu(chat_id=None):
         for i, acc in enumerate(saved, 1):
             label = acc['email'].split('@')[0]
             markup.add(types.InlineKeyboardButton(
-                f"⚡ הדخول المباشر: الحساب {i} ({label})",
+                f"⚡ الدخول المباشر: الحساب {i} ({label})",
                 callback_data=f"switch_acc_{i-1}"
             ))
     markup.add(types.InlineKeyboardButton(
@@ -1106,15 +1089,20 @@ def _handle_callback_inner(call):
         bot.answer_callback_query(call.id)
         current_active = auto_hunt_status.get(chat_id, False)
         current_mode   = hunt_mode.get(chat_id, "")
+        
         if current_active and current_mode == "GT":
             auto_hunt_status[chat_id] = False
-            status_msg = "🔴 تم إيقاف تصيد (أكبر من ساعتين) على كل الحسابات"
+            status_msg = "🔴 تم إيقاف تصيد (أكبر من ساعتين) لجميع الحسابات المحفوظة"
         else:
             auto_hunt_status[chat_id] = True
             hunt_mode[chat_id] = "GT"
-            status_msg = "✅ تم تفعيل تصيد (أكبر من ساعتين) على كل الحسابات"
-        # تطبيق الإعداد على كل الحسابات المحفوظة لنفس المستخدم، وليس فقط الحساب النشط
-        sync_chat_settings_to_all_accounts(chat_id)
+            status_msg = "✅ تم تفعيل تصيد (أكبر من ساعتين) لجميع الحسابات المحفوظة"
+            
+        # تطبيق التعديلات على جميع الحسابات الخاصة بالمستخدم (chat_id)
+        saved_accounts = get_saved_multi_accounts(chat_id)
+        for acc in saved_accounts:
+            sync_chat_settings_to_email(chat_id, acc['email'])
+            
         try:
             bot.edit_message_text(
                 f"⚡ **اصطحاب العمل**\n{status_msg}\nــــــــــــــــــ",
@@ -1129,15 +1117,20 @@ def _handle_callback_inner(call):
         bot.answer_callback_query(call.id)
         current_active = auto_hunt_status.get(chat_id, False)
         current_mode   = hunt_mode.get(chat_id, "")
+        
         if current_active and current_mode == "GTE":
             auto_hunt_status[chat_id] = False
-            status_msg = "🔴 تم إيقاف تصيد (ساعتين فما فوق) على كل الحسابات"
+            status_msg = "🔴 تم إيقاف تصيد (ساعتين فما فوق) لجميع الحسابات المحفوظة"
         else:
             auto_hunt_status[chat_id] = True
             hunt_mode[chat_id] = "GTE"
-            status_msg = "✅ تم تفعيل تصيد (ساعتين فما فوق) على كل الحسابات"
-        # تطبيق الإعداد على كل الحسابات المحفوظة لنفس المستخدم، وليس فقط الحساب النشط
-        sync_chat_settings_to_all_accounts(chat_id)
+            status_msg = "✅ تم تفعيل تصيد (ساعتين فما فوق) لجميع الحسابات المحفوظة"
+            
+        # تطبيق التعديلات على جميع الحسابات الخاصة بالمستخدم (chat_id)
+        saved_accounts = get_saved_multi_accounts(chat_id)
+        for acc in saved_accounts:
+            sync_chat_settings_to_email(chat_id, acc['email'])
+            
         try:
             bot.edit_message_text(
                 f"⚡ **اصطحاب العمل**\n{status_msg}\nــــــــــــــــــ",
