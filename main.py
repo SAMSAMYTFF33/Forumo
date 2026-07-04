@@ -1,3 +1,7 @@
+
+
+
+
 import time
 import requests
 import random
@@ -56,12 +60,7 @@ HEADERS = {
 TAKE_COOLDOWN = 60
 
 # ==========================================
-# الحسابات المستثناة من قيود البروكسي (تعمل بـ IP الاستضافة)
-# ==========================================
-ALLOWED_DIRECT_IP_ACCOUNT = "miricanmoroco@gmail.com"
-
-# ==========================================
-# البروكسيات الثابتة للحسابات المستثناة (لتسجيل الدخول)
+# البروكسيات الثابتة للحسابات المستثناة
 # ==========================================
 EXEMPT_ACCOUNTS = [
     "france260026@gmail.com", 
@@ -123,7 +122,7 @@ def refresh_fallback_proxies():
             lines = [p.strip() for p in r.text.strip().split('\n') if p.strip()]
             random.shuffle(lines)
             sample = lines[:80]  # أخذ 80 فقط لتخفيف الضغط على الاستضافة
-
+            
             working = []
             # استخدام 8 خيوط كحد أقصى لعدم استهلاك المعالج
             with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
@@ -136,7 +135,7 @@ def refresh_fallback_proxies():
                                 working.append(res)
                         if len(working) >= 4:
                             break
-
+            
             with fallback_lock:
                 for i, email in enumerate(EXEMPT_ACCOUNTS):
                     if i < len(working):
@@ -161,7 +160,7 @@ def check_single_exempt_proxy(prx):
             proxy_url = f"http://{PROXY_USER}:{PROXY_PASS}@{prx}"
 
         start = time.time()
-        # تم زيادة وقت المهلة هنا إلى 12 ثانية
+        # تم زيادة وقت المهلة هنا إلى 12 ثانية بناءً على طلبك
         r = requests.get(check_url, headers=HEADERS,
                          proxies={"http": proxy_url, "https": proxy_url},
                          timeout=12)
@@ -179,32 +178,32 @@ def get_fastest_proxy_exempt(email):
     """
     email_lower = email.lower().strip()
     proxies = ACCOUNT_PROXIES.get(email_lower)
-
-    # 1. فحص البروكسيات الثابتة بشكل متوازي
+    
+    # 1. فحص البروكسيات الثابتة بشكل متوازي (في نفس الوقت) وزيادة المهلة
     if proxies:
         fastest_url = None
         best_time = float('inf')
-
+        
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(proxies)) as executor:
             results = executor.map(check_single_exempt_proxy, proxies)
-
+            
         for proxy_url, elapsed in results:
             if proxy_url and elapsed < best_time:
                 best_time = elapsed
                 fastest_url = proxy_url
-
+                
         if fastest_url:
             return fastest_url
 
     # 2. اللجوء للنظام المجاني إذا ماتت كل البروكسيات الثابتة
     with fallback_lock:
         current_fallback = fallback_proxies.get(email_lower)
-
+    
     if current_fallback and test_single_free_proxy(current_fallback):
         return current_fallback
-
+    
     refresh_fallback_proxies()
-
+    
     with fallback_lock:
         return fallback_proxies.get(email_lower)
 
@@ -212,10 +211,10 @@ def notify_user_no_proxy(chat_id, email):
     """إرسال تنبيه للمستخدم يفيد بالدخول بدون بروكسي"""
     try:
         account_label = email.split("@")[0]
-        msg = f"⚠️ **تنبيه البروكسي (تسجيل الدخول)**\n\n" \
+        msg = f"⚠️ **تنبيه البروكسي**\n\n" \
               f"👤 الحساب: **{account_label}** (`{email}`)\n" \
-              f"🛑 جميع البروكسيات ميتة أو معطلة!\n" \
-              f"🔄 **تم تسجيل الدخول بدون بروكسي بنجاح (لكن سيُمنع اصطحاب المهام).**"
+              f"🛑 جميع البروكسيات الثابتة والمجانية ميتة أو معطلة!\n" \
+              f"🔄 **تم تسجيل الدخول مباشرة بدون بروكسي بنجاح.**"
         bot.send_message(chat_id, msg, parse_mode="Markdown")
     except Exception as e:
         print(f"[NOTIFY] خطأ في إرسال تنبيه البروكسي: {e}")
@@ -320,14 +319,18 @@ def sync_email_settings_to_chat(chat_id, email):
     auto_hunt_status[chat_id] = acct_auto_hunt_status.get(e, False)
     hunt_mode[chat_id]        = acct_hunt_mode.get(e, 'GTE')
 
-def sync_settings_to_all_accounts(chat_id, mode, active):
-    saved = get_saved_multi_accounts(chat_id)
+def sync_chat_settings_to_all_accounts(chat_id):
+    """
+    يطبّق إعداد اصطحاب المهام (auto_hunt_status / hunt_mode) الحالي لـ chat_id
+    على كل الحسابات المحفوظة لنفس المستخدم دفعة واحدة، وليس فقط الحساب النشط.
+    """
+    active = auto_hunt_status.get(chat_id, False)
+    mode   = hunt_mode.get(chat_id, 'GTE')
+    saved  = get_saved_multi_accounts(chat_id)
     for acc in saved:
         e = acc['email'].lower().strip()
         acct_auto_hunt_status[e] = active
-        acct_hunt_mode[e] = mode
-    auto_hunt_status[chat_id] = active
-    hunt_mode[chat_id] = mode
+        acct_hunt_mode[e]        = mode
 
 def register_account_in_active(chat_id, email, password):
     with active_accounts_lock:
@@ -472,6 +475,7 @@ def get_authenticated_session(username, password, chat_id=None):
         if fast_proxy_url:
             sess.proxies = {"http": fast_proxy_url, "https": fast_proxy_url}
         else:
+            # تم تعديل هذا الجزء: الدخول المباشر بدون بروكسي إذا كانت البروكسيات معطلة
             print(f"[SESSION] ⚠️ {email_lower}: البروكسيات ميتة! جاري الدخول المباشر بدون بروكسي...")
             if chat_id:
                 threading.Thread(target=notify_user_no_proxy, args=(chat_id, username), daemon=True).start()
@@ -751,7 +755,7 @@ def get_auth_menu(chat_id=None):
         for i, acc in enumerate(saved, 1):
             label = acc['email'].split('@')[0]
             markup.add(types.InlineKeyboardButton(
-                f"⚡ الدخول المباشر: الحساب {i} ({label})",
+                f"⚡ הדخول المباشر: الحساب {i} ({label})",
                 callback_data=f"switch_acc_{i-1}"
             ))
     markup.add(types.InlineKeyboardButton(
@@ -827,7 +831,6 @@ def get_take_work_menu(chat_id):
 # ==========================================
 _bg_last_hunt = {}
 _bg_last_take = {}
-_bg_last_proxy_fail_msg = {}  # مصفوفة لمنع التكرار المزعج لرسائل خطأ البروكسي
 
 def _bg_process_one_account_inner(chat_id, email, password, current_time):
     key = (chat_id, email)
@@ -849,34 +852,6 @@ def _bg_process_one_account_inner(chat_id, email, password, current_time):
                         if should_take:
                             session = get_authenticated_session(email, password, chat_id)
                             if session:
-                                # ----------------------------------------------------
-                                # 🛡️ الحماية الصارمة: منع اصطحاب المهام بدون بروكسي
-                                # ----------------------------------------------------
-                                has_proxy = bool(getattr(session, 'proxies', {}))
-                                if not has_proxy and e != ALLOWED_DIRECT_IP_ACCOUNT:
-                                    now_t = time.time()
-                                    # التنبيه كل 60 ثانية لتفادي إغراق الشات بالرسائل
-                                    if now_t - _bg_last_proxy_fail_msg.get(key, 0) >= 60:
-                                        try:
-                                            bot.send_message(
-                                                chat_id,
-                                                f"⚠️ **إحباط محاولة اصطحاب مهمة!**\n\n"
-                                                f"👤 الحساب: `{e}`\n"
-                                                f"🛑 السبب: فشل الاتصال بالبروكسي.\n"
-                                                f"🛡️ **الإجراء:** يمنع اصطحاب المهام بالـ IP الأصلي.\n"
-                                                f"🔄 سيتم إعادة المحاولة بالبروكسي لاحقاً...",
-                                                parse_mode="Markdown"
-                                            )
-                                            _bg_last_proxy_fail_msg[key] = now_t
-                                        except Exception:
-                                            pass
-                                    
-                                    # حذف الجلسة لإجبار النظام على جلب بروكسي جديد عند المحاولة القادمة
-                                    with auth_sessions_lock:
-                                        user_auth_sessions.pop(e, None)
-                                    break  # الخروج من حلقة المهام لهذا الحساب لتأجيل المحاولة
-                                # ----------------------------------------------------
-
                                 success = take_task_via_post(session, target_task['task_page'])
                                 if success:
                                     _bg_last_take[key] = time.time()
@@ -1132,11 +1107,14 @@ def _handle_callback_inner(call):
         current_active = auto_hunt_status.get(chat_id, False)
         current_mode   = hunt_mode.get(chat_id, "")
         if current_active and current_mode == "GT":
-            sync_settings_to_all_accounts(chat_id, "GT", False)
-            status_msg = "🔴 تم إيقاف تصيد (أكبر من ساعتين) لجميع الحسابات"
+            auto_hunt_status[chat_id] = False
+            status_msg = "🔴 تم إيقاف تصيد (أكبر من ساعتين) على كل الحسابات"
         else:
-            sync_settings_to_all_accounts(chat_id, "GT", True)
-            status_msg = "✅ تم تفعيل تصيد (أكبر من ساعتين) لجميع الحسابات"
+            auto_hunt_status[chat_id] = True
+            hunt_mode[chat_id] = "GT"
+            status_msg = "✅ تم تفعيل تصيد (أكبر من ساعتين) على كل الحسابات"
+        # تطبيق الإعداد على كل الحسابات المحفوظة لنفس المستخدم، وليس فقط الحساب النشط
+        sync_chat_settings_to_all_accounts(chat_id)
         try:
             bot.edit_message_text(
                 f"⚡ **اصطحاب العمل**\n{status_msg}\nــــــــــــــــــ",
@@ -1152,11 +1130,14 @@ def _handle_callback_inner(call):
         current_active = auto_hunt_status.get(chat_id, False)
         current_mode   = hunt_mode.get(chat_id, "")
         if current_active and current_mode == "GTE":
-            sync_settings_to_all_accounts(chat_id, "GTE", False)
-            status_msg = "🔴 تم إيقاف تصيد (ساعتين فما فوق) لجميع الحسابات"
+            auto_hunt_status[chat_id] = False
+            status_msg = "🔴 تم إيقاف تصيد (ساعتين فما فوق) على كل الحسابات"
         else:
-            sync_settings_to_all_accounts(chat_id, "GTE", True)
-            status_msg = "✅ تم تفعيل تصيد (ساعتين فما فوق) لجميع الحسابات"
+            auto_hunt_status[chat_id] = True
+            hunt_mode[chat_id] = "GTE"
+            status_msg = "✅ تم تفعيل تصيد (ساعتين فما فوق) على كل الحسابات"
+        # تطبيق الإعداد على كل الحسابات المحفوظة لنفس المستخدم، وليس فقط الحساب النشط
+        sync_chat_settings_to_all_accounts(chat_id)
         try:
             bot.edit_message_text(
                 f"⚡ **اصطحاب العمل**\n{status_msg}\nــــــــــــــــــ",
