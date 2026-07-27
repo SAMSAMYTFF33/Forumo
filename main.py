@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 import threading
 import re
 import os
+import json
 import telebot
 from telebot import types
 import concurrent.futures
@@ -58,105 +59,7 @@ HEADERS = {
     "Referer": BASE_URL
 }
 
-TAKE_COOLDOWN = 60
-
-# ==========================================
-# البروكسيات الثابتة للحسابات المستثناة
-# ==========================================
-EXEMPT_ACCOUNTS = [
-    "france260026@gmail.com", 
-    "rossxpro26@gmail.com", 
-    "nurun2363@gmail.com",
-    "samsamytff@gmail.com"
-]
-
-ACCOUNT_PROXIES = {
-    "france260026@gmail.com": [
-        "31.59.20.176:6754", "31.56.127.193:7684", "45.38.107.97:6014"
-    ],
-    "rossxpro26@gmail.com": [
-        "198.105.121.200:6462", "64.137.96.74:6641", "198.23.243.226:6361"
-    ],
-    "nurun2363@gmail.com": [
-        "38.154.185.97:6370", "84.247.60.125:6095"
-    ],
-    "samsamytff@gmail.com": [
-        "142.111.67.146:5611", "191.96.254.138:6185"
-    ]
-}
-
-PROXY_USER = "dtzufdok"
-PROXY_PASS = "sp770jph5hm2"
-
-def check_single_exempt_proxy(prx):
-    """دالة فرعية لفحص البروكسي الثابت وإرجاع الوقت والـ URL"""
-    check_url = "https://api.ipify.org?format=json"
-    try:
-        if "mnvfoqyw:18kjk2uk8zmh" in prx:
-            parts = prx.split(":")
-            proxy_url = f"http://{parts[2]}:{parts[3]}@{parts[0]}:{parts[1]}"
-        else:
-            proxy_url = f"http://{PROXY_USER}:{PROXY_PASS}@{prx}"
-
-        start = time.time()
-        # تم تقليل المهلة هنا إلى 5 ثوانٍ لضمان سرعة الفحص والتنفيذ الفوري عند الحاجة
-        r = requests.get(check_url, headers=HEADERS,
-                         proxies={"http": proxy_url, "https": proxy_url},
-                         timeout=5)
-        elapsed = time.time() - start
-        if r.status_code == 200:
-            return proxy_url, elapsed
-    except Exception:
-        pass
-    return None, float('inf')
-
-# 🚀 تم تعديل الدالة لتقوم بالفحص اللحظي الفوري فائق السرعة بالتوازي عند طلب المهمة مباشرة
-def get_fastest_proxy_exempt(email):
-    """
-    تقوم بفحص جميع البروكسيات الثابتة للحساب بالتوازي فوراً عند استدعائها
-    وتحديد الأسرع لتمريره مباشرة دون انتظار مؤقتات أو كاش قديم.
-    """
-    email_lower = email.lower().strip()
-    proxies = ACCOUNT_PROXIES.get(email_lower)
-    if not proxies:
-        return None
-
-    fastest_url = None
-    best_time = float('inf')
-
-    # فحص متوازي فوري لكافة البروكسيات المتاحة للحساب للحصول على أسرع استجابة
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(proxies)) as executor:
-        results = executor.map(check_single_exempt_proxy, proxies)
-
-    for proxy_url, elapsed in results:
-        if proxy_url and elapsed < best_time:
-            best_time = elapsed
-            fastest_url = proxy_url
-
-    return fastest_url
-
-def notify_user_no_proxy(chat_id, email):
-    try:
-        account_label = email.split("@")[0]
-        msg = f"⚠️ **تنبيه البروكسي**\n\n" \
-              f"👤 الحساب: **{account_label}** (`{email}`)\n" \
-              f"🛑 جميع البروكسيات الثابتة ميتة أو معطلة!\n" \
-              f"🚫 **تم إلغاء تسجيل الدخول لهذا الحساب — لا يُسمح بالدخول بدون بروكسي إطلاقاً.**"
-        bot.send_message(chat_id, msg, parse_mode="Markdown")
-    except Exception as e:
-        print(f"[NOTIFY] خطأ في إرسال تنبيه البروكسي: {e}")
-
-def _session_has_proxy_attached(session, email):
-    email_lower = email.lower().strip()
-    if email_lower not in EXEMPT_ACCOUNTS:
-        return True
-
-    proxy_dict = getattr(session, 'proxies', {})
-    if not proxy_dict:
-        return False
-
-    proxy_url = proxy_dict.get("http") or proxy_dict.get("https")
-    return bool(proxy_url)
+TAKE_COOLDOWN = 30
 
 # ==========================================
 # التخزين المحلي (بدون سحابة)
@@ -213,6 +116,15 @@ acct_hunt_mode        = {}
 auto_hunt_status = {}
 hunt_mode        = {}
 last_take_time   = {}
+
+# 🤖 تنفيذ تلقائي عبر القوالب مع كل اصطحاب ناجح
+# 🤖 القوالب: خدمتين مستقلتين + حالة تشغيل/إيقاف لكل واحدة
+template_scan_status    = {}  # chat_id -> True/False — "تنفيذ المهام" (فحص المهام الحالية دفعة واحدة)
+template_scan_stop_events = {}  # chat_id -> threading.Event() لإيقاف الفحص الجاري فورًا
+template_delay_status   = {}  # chat_id -> True/False — "تمرير تنفيذ بعد الاصطحاب" (مهلة عشوائية)
+_known_confirmed_ids    = {}  # (chat_id, email_lower) -> set(task_id) — لمعرفة المهمة اللي اتاخدت جديد
+_template_no_match_cache = {} # chat_id -> set(task_id) اتفحصت قبل كده ومالهاش تطابق
+_template_cache_lock    = threading.Lock()
 
 # ==========================================
 # دوال مساعدة للإعدادات
@@ -313,20 +225,43 @@ def handle_blocked_account(email, chat_id_origin=None):
         threading.Thread(target=_clear, daemon=True).start()
 
 def handle_captcha_detected(email, context=""):
+    """
+    لما الـ CAPTCHA تظهر، بيتوقف الاصطحاب التلقائي لهذا الحساب بس
+    (acct_auto_hunt_status خاص بالحساب نفسه، مش بكل الحسابات) — باقي
+    حسابات نفس الشات بتفضل شغالة عادي من غير أي تأثير.
+
+    بيتبعت تنبيه فيه زر "✅ لقد نفدت captcha" لكل شات الحساب ده شغال
+    فيه فعليًا (زيادة على شات الأدمن)، وبمجرد الضغط عليه الحساب يرجع
+    يشتغل عادي تاني.
+    """
     email_lower = email.lower().strip()
     account_label = email_lower.split("@")[0]
     acct_auto_hunt_status[email_lower] = False
     with auth_sessions_lock:
         user_auth_sessions.pop(email_lower, None)
+
     captcha_msg = (
         f"🤖 **تنبيه: CAPTCHA ظهر!**\n\n"
         f"🔐 الحساب: **{account_label}** (`{email_lower}`)\n"
-        f"⚠️ يجب حل التحقق يدوياً."
+        f"⚠️ تم إيقاف الاصطحاب لهذا الحساب فقط — باقي حساباتك شغالة عادي.\n"
+        f"يجب حل التحقق يدوياً، وبعدين اضغط الزر تحت عشان الحساب يرجع يشتغل."
     )
-    try:
-        bot.send_message(CAPTCHA_ALERT_CHAT_ID, captcha_msg, parse_mode="Markdown")
-    except Exception:
-        pass
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton(
+        "✅ لقد نفدت captcha", callback_data=f"captcha_resolved_{email_lower}"
+    ))
+
+    target_chats = {CAPTCHA_ALERT_CHAT_ID}
+    with active_accounts_lock:
+        for cid, accounts in active_accounts.items():
+            if email_lower in accounts:
+                target_chats.add(cid)
+
+    for cid in target_chats:
+        try:
+            bot.send_message(cid, captcha_msg, parse_mode="Markdown", reply_markup=markup)
+        except Exception:
+            pass
 
 # ==========================================
 # إنشاء الجلسات
@@ -349,6 +284,9 @@ def get_authenticated_session(username, password, chat_id=None):
         cached = user_auth_sessions.get(email_lower)
     if cached:
         try:
+            # 🔒 تسجيل الدخول / التحقق من الجلسة دايمًا اتصال عادي —
+            # حتى لو الجلسة كانت لسه شايلة بروكسي من آخر عرض/اصطحاب مهمة.
+            cached.proxies = {}
             test_r = cached.get(BASE_URL, headers=HEADERS, timeout=8)
             page_state = detect_page_state(test_r.text)
             if page_state == "blocked":
@@ -369,15 +307,9 @@ def get_authenticated_session(username, password, chat_id=None):
         with auth_sessions_lock:
             user_auth_sessions.pop(email_lower, None)
 
+    # 🌐 تسجيل الدخول وجلب المهام دايماً اتصال عادي من غير بروكسي — زي أي حساب
+    # تاني بالظبط. البروكسي بيتفعّل بس وقت اصطحاب المهمة نفسها (take_task_via_post).
     sess = requests.Session()
-    if email_lower in EXEMPT_ACCOUNTS:
-        fast_proxy_url = get_fastest_proxy_exempt(email_lower)
-        if fast_proxy_url:
-            sess.proxies = {"http": fast_proxy_url, "https": fast_proxy_url}
-        else:
-            print(f"[SESSION] ⚠️ {email_lower}: البروكسيات ميتة! جاري الدخول المباشر بدون بروكسي...")
-            if chat_id:
-                threading.Thread(target=notify_user_no_proxy, args=(chat_id, username), daemon=True).start()
 
     login_data = {
         "signin[username]": username,
@@ -433,20 +365,37 @@ def translate_and_parse_duration(duration_text):
         return 120, "2 ساعات"
 
 def fetch_publisher_stats(session):
-    stats = {"to_execute": "0", "on_check": "0", "completed": "0"}
+    """
+    يجيب أرقام الإحصائيات الصحيحة من نفس صفحة
+    /publisher-requests/socio/confirmed اللي بيستخدمها زر 'تنفيذ مهام' —
+    عن طريق قراءة الجدول الفعلي (رابط بعنوان title معروف + الرقم جنبه في
+    نفس الصف)، بدل البحث النصي العشوائي في الصفحة كلها اللي كان بيدّي
+    أرقام غلط لو الكلمة اتكررت في مكان تاني (زي عنوان الجدول نفسه).
+    """
+    stats = {"to_execute": "0", "on_check": "0", "arbitration": "0", "completed": "0"}
+    label_map = {
+        "Выполнить":   "to_execute",    # قيد التنفيذ
+        "На проверке": "on_check",      # قيد المراجعة
+        "Арбитраж":    "arbitration",   # التحكيم
+        "Выполнено":   "completed",     # مكتملة
+    }
     try:
-        r = session.get(STATS_URL, headers=HEADERS, timeout=10)
-        if r.status_code == 200:
-            page_text = r.text
-            m = re.search(r"Выполнить\s+(\d+)", page_text)
-            if m:
-                stats["to_execute"] = m.group(1)
-            m = re.search(r"На проверке\s+(\d+)", page_text)
-            if m:
-                stats["on_check"] = m.group(1)
-            m = re.search(r"Выполнено\s+(\d+)", page_text)
-            if m:
-                stats["completed"] = m.group(1)
+        r = session.get(CONFIRMED_URL, headers=HEADERS, timeout=10)
+        if r.status_code != 200:
+            return stats
+        soup = BeautifulSoup(r.text, "html.parser")
+        for a in soup.find_all("a", class_="link-requests"):
+            key = label_map.get(a.get("title", "").strip())
+            if not key:
+                continue
+            tr = a.find_parent("tr")
+            if not tr:
+                continue
+            tds = tr.find_all("td")
+            if len(tds) >= 2:
+                count_text = tds[-1].get_text(strip=True)
+                if count_text.isdigit():
+                    stats[key] = count_text
     except Exception:
         pass
     return stats
@@ -455,6 +404,9 @@ def get_site_data(username, password, chat_id):
     session = get_authenticated_session(username, password, chat_id)
     if not session:
         return None, "AUTH_FAILED"
+
+    # 🌐 جلب/عرض المهام اتصال عادي من غير بروكسي — البروكسي بيتفعّل بس
+    # لحظة الاصطحاب الفعلي (شوف take_task_via_post وموقع استدعائها).
     try:
         r = _safe_get(TARGET_URL, session=session, headers=HEADERS, timeout=12)
         page_state = detect_page_state(r.text)
@@ -572,7 +524,7 @@ def get_site_data(username, password, chat_id):
             try:
                 stats_data = stats_future.result(timeout=8)
             except Exception:
-                stats_data = {"to_execute": "0", "on_check": "0", "completed": "0"}
+                stats_data = {"to_execute": "0", "on_check": "0", "arbitration": "0", "completed": "0"}
 
         user_numbered_tasks[chat_id] = tasks_list
         return {"balance": balance, "stats": stats_data, "tasks": tasks_list}, "SUCCESS"
@@ -581,7 +533,10 @@ def get_site_data(username, password, chat_id):
 
 def take_task_via_post(session, task_page_url):
     try:
-        response = session.get(task_page_url, headers=HEADERS, timeout=10)
+        try:
+            response = session.get(task_page_url, headers=HEADERS, timeout=10)
+        except Exception:
+            return "FAILED"
         if response.status_code != 200:
             return "FAILED"
 
@@ -636,6 +591,353 @@ def take_task_via_post(session, task_page_url):
     except Exception:
         return "FAILED"
 
+
+def fetch_confirmed_tasks(session):
+    """
+    يجيب قائمة المهام المصطحبة اللي لسه محتاجة تنفيذ من
+    /publisher-requests/socio/confirmed — للعرض في قائمة "تنفيذ مهام".
+    اتصال عادي (زي عرض المهام)، من غير بروكسي.
+    """
+    tasks = []
+    try:
+        r = session.get(CONFIRMED_URL, headers=HEADERS, timeout=12)
+        if r.status_code != 200:
+            return tasks
+        soup = BeautifulSoup(r.text, "html.parser")
+        tbody = soup.find("tbody", class_="td-request")
+        if not tbody:
+            return tasks
+        for row in tbody.find_all("tr"):
+            checkbox = row.find("input", class_="batch_checkbox")
+            if not checkbox or not checkbox.get("value"):
+                continue
+            task_id = checkbox.get("value")
+            link = row.find("a", href=re.compile(rf"/request/{task_id}/history"))
+            title = link.get_text(strip=True) if link else f"مهمة {task_id}"
+            cells = row.find_all("td")
+            remaining = cells[1].get_text(strip=True) if len(cells) > 1 else ""
+            tasks.append({"id": task_id, "title": title, "remaining": remaining})
+    except Exception:
+        pass
+    return tasks
+
+
+def submit_task_report(session, task_id, report_url, report_message):
+    """
+    بيبعت تقرير إنجاز المهمة رقم task_id عبر فورم 'Где выполнено' الموجود
+    في /request/{task_id}/history — بياخد الحقول الـ hidden ديناميكيًا من
+    الفورم نفسه (بدل ما يفترضها) ويضيف عليها request[url] و request[message].
+
+    التوقيت مبني على نمط بشري بسيط (تأخيرات عشوائية بين كل خطوة والتانية)
+    عشان الطلبات ماتبقاش سلسلة سريعة جدًا ومتوقعة:
+      1) فتح الصفحة، وتأخير بسيط زي وقت القراءة/التمرير.
+      2) تأخير قبل "التركيز" على حقل الرابط.
+      3) تأخير بعد "لصق" الرابط قبل الضغط على إرسال.
+    ملحوظة مهمة: البوت ده بيشتغل بطلبات HTTP مباشرة (requests) مش متصفح
+    حقيقي، فمفيش DOM ولا ماوس ولا سكرول فعلي يتحرك — التأخيرات دي بتحاكي
+    الإيقاع الزمني البشري بس (وهو الحاجة اللي السيرفر فعليًا بيقدر يلاحظها
+    زي معدل الطلبات)، مش حركة فأرة أو تمرير حقيقي على شاشة مش موجودة.
+    """
+    page_url = f"{BASE_URL}/request/{task_id}/history"
+    try:
+        r = session.get(page_url, headers=HEADERS, timeout=12)
+        if r.status_code != 200:
+            return "FAILED"
+
+        # 🕐 تأخير "قراءة/تمرير" الصفحة بعد فتحها
+        time.sleep(random.uniform(1, 3))
+
+        soup = BeautifulSoup(r.text, "html.parser")
+        form = soup.find("form", attrs={"name": "message_form"})
+        if not form:
+            form = soup.find("form", action=re.compile(r"/history"))
+        if not form:
+            return "FAILED"
+
+        post_data = {}
+        for hidden_input in form.find_all("input", type="hidden"):
+            if hidden_input.get("name"):
+                post_data[hidden_input.get("name")] = hidden_input.get("value", "")
+
+        # 🕐 تأخير "التركيز" على حقل الرابط قبل تعبئته
+        time.sleep(random.uniform(1, 2))
+
+        post_data["request[status]"]  = "completed"
+        post_data["request[url]"]     = report_url
+        post_data["request[message]"] = report_message
+
+        # 🕐 تأخير بعد "لصق" البيانات وقبل الضغط على إرسال
+        time.sleep(random.uniform(1, 3))
+
+        action = form.get("action") or page_url
+        post_action_url = action if action.startswith("http") else BASE_URL + action
+
+        res = session.post(post_action_url, data=post_data, headers=HEADERS, timeout=12)
+        if res.status_code != 200:
+            return "FAILED"
+
+        page_state = detect_page_state(res.text)
+        if page_state == "blocked":
+            return "BLOCKED"
+        if page_state == "captcha":
+            return "CAPTCHA"
+
+        return "SUCCESS"
+    except Exception:
+        return "FAILED"
+
+
+# ==========================================
+# 🤖 تنفيذ مهام عبر القوالب (نفس منطق السكريبت اللي كان شغال على الهاتف،
+# لكن الملف بقى بيتبعت عبر شات البوت بدل ما يتقرا من تخزين الهاتف المحلي)
+# ==========================================
+TEMPLATE_DB_DIR = "template_dbs"
+os.makedirs(TEMPLATE_DB_DIR, exist_ok=True)
+
+
+def _template_db_path(chat_id):
+    return os.path.join(TEMPLATE_DB_DIR, f"{chat_id}.txt")
+
+
+def parse_local_database(file_path):
+    """
+    بتحلل ملف القوالب (نفس الصيغة بالظبط اللي كانت بتتقرا من الهاتف):
+    كل مهمة مرجعية مفصولة بـ © وفيها رابط الصورة (sun9...) ثم "URL:"
+    ثم رابط التنفيذ، ثم "to be sure:" ثم نص التقرير.
+    """
+    database = {}
+    if not os.path.exists(file_path):
+        return database
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except Exception:
+        return database
+
+    blocks = content.split("©")
+    for block in blocks:
+        if not block.strip():
+            continue
+        lines = [line.strip() for line in block.split("\n") if line.strip()]
+        if len(lines) >= 4:
+            img_url = lines[1]
+            img_clean_key = img_url.split("?")[0]
+
+            url_work = ""
+            to_be_sure = ""
+            for i, line in enumerate(lines):
+                if line.startswith("URL:") and i + 1 < len(lines):
+                    url_work = lines[i + 1]
+                if "to be sure:" in line and i + 1 < len(lines):
+                    to_be_sure = lines[i + 1]
+
+            if img_clean_key and url_work:
+                database[img_clean_key] = {"url": url_work, "message": to_be_sure}
+
+    return database
+
+
+def get_template_db_for_chat(chat_id):
+    """بتقرا وتحلل ملف القوالب الخاص بهذا الشات من على القرص (لو موجود)."""
+    return parse_local_database(_template_db_path(chat_id))
+
+
+def save_template_db_file(chat_id, file_bytes):
+    """بتحفظ الملف اللي بعته المستخدم في الشات كقاعدة قوالب لهذا الشات."""
+    path = _template_db_path(chat_id)
+    with open(path, "wb") as f:
+        f.write(file_bytes)
+    # قاعدة جديدة = نتائج الفحص القديمة ممكن تتغيّر، فنمسح الكاش القديم
+    with _template_cache_lock:
+        _template_no_match_cache.pop(chat_id, None)
+    return parse_local_database(path)
+
+
+def delete_template_db_file(chat_id):
+    """بتحذف ملف القوالب الخاص بهذا الشات لو موجود، وترجع True/False."""
+    path = _template_db_path(chat_id)
+    existed = os.path.exists(path)
+    if existed:
+        try:
+            os.remove(path)
+        except Exception:
+            pass
+    with _template_cache_lock:
+        _template_no_match_cache.pop(chat_id, None)
+    return existed
+
+
+def _is_template_no_match_cached(chat_id, task_id):
+    with _template_cache_lock:
+        return task_id in _template_no_match_cache.get(chat_id, set())
+
+
+def _mark_template_no_match(chat_id, task_id):
+    with _template_cache_lock:
+        _template_no_match_cache.setdefault(chat_id, set()).add(task_id)
+
+
+SUN_IMAGE_URL_PATTERN = re.compile(
+    r'https://sun9-\d+\.(?:userapi\.com|vkuserphoto\.ru)/[^\s"\'><]+'
+)
+
+
+def find_template_match_for_task(session, chat_id, task_id):
+    """
+    بتفحص مهمة واحدة مقابل قاعدة القوالب وترجع (status, matched_data):
+      - ("CACHED_NO_MATCH", None) لو اتفحصت قبل كده ولقيت مفيش تطابق
+      - ("NO_DB", None) لو مفيش ملف قوالب أصلاً
+      - ("NO_IMAGE", None) لو الصفحة مفيهاش رابط صورة sun
+      - ("NO_MATCH", None) لو فيه صورة بس مش موجودة في القوالب
+      - ("MATCHED", {"url":..., "message":...}) لو لقيت تطابق
+      - ("FAILED", None) لو حصل خطأ في الطلب نفسه
+
+    لو النتيجة NO_IMAGE أو NO_MATCH، بتتسجل في كاش عام لكل الشات عشان أي
+    حساب تاني يشوف نفس الـ task_id يتخطاه فورًا من غير ما يعيد الفحص.
+    """
+    if _is_template_no_match_cached(chat_id, task_id):
+        return "CACHED_NO_MATCH", None
+
+    db = get_template_db_for_chat(chat_id)
+    if not db:
+        return "NO_DB", None
+
+    page_url = f"{BASE_URL}/request/{task_id}/history"
+    try:
+        r = session.get(page_url, headers=HEADERS, timeout=12)
+        if r.status_code != 200:
+            return "FAILED", None
+
+        found_urls = SUN_IMAGE_URL_PATTERN.findall(r.text)
+        if not found_urls:
+            _mark_template_no_match(chat_id, task_id)
+            return "NO_IMAGE", None
+
+        for sun_url in found_urls:
+            clean_key = sun_url.split("?")[0]
+            if clean_key in db:
+                return "MATCHED", db[clean_key]
+
+        _mark_template_no_match(chat_id, task_id)
+        return "NO_MATCH", None
+    except Exception:
+        return "FAILED", None
+
+
+def scan_and_match_all_tasks(session, chat_id, stop_event=None):
+    """
+    فحص فقط (من غير أي تنفيذ) لكل المهام المصطحبة حاليًا مقابل قاعدة
+    البيانات. بترجع قائمة المهام المتطابقة (عشان تُنفّذ لاحقًا بعد المهلة
+    العشوائية) + إحصائيات الفحص.
+    """
+    db = get_template_db_for_chat(chat_id)
+    if not db:
+        return {"error": "no_db"}
+
+    tasks = fetch_confirmed_tasks(session)
+    matched_list = []
+    stats = {
+        "total": len(tasks), "no_image": 0, "no_match": 0,
+        "cached": 0, "check_failed": 0, "stopped": False,
+    }
+
+    for t in tasks:
+        if stop_event is not None and stop_event.is_set():
+            stats["stopped"] = True
+            break
+
+        task_id = t["id"]
+        status, matched_data = find_template_match_for_task(session, chat_id, task_id)
+
+        if status == "MATCHED":
+            matched_list.append((task_id, matched_data))
+        elif status == "CACHED_NO_MATCH":
+            stats["cached"] += 1
+        elif status == "NO_IMAGE":
+            stats["no_image"] += 1
+        elif status == "NO_MATCH":
+            stats["no_match"] += 1
+        else:
+            stats["check_failed"] += 1
+
+    return {"matched_list": matched_list, "stats": stats}
+
+
+def _snapshot_confirmed_baseline(chat_id):
+    """
+    بتتنادى مرة واحدة أول ما يتفعّل زر 'تنفيذ تلقائي' — بتسجّل المهام
+    المصطحبة الحالية لكل حساب كخط أساس، عشان بعد كده أي مهمة 'جديدة'
+    تظهر في القائمة تتعرف إنها المهمة اللي لسه اتاخدت، من غير ما نعيد
+    فحص المهام القديمة اللي كانت موجودة من قبل التفعيل.
+    """
+    saved = get_saved_multi_accounts(chat_id)
+    for acc in saved:
+        email_lower = acc['email'].lower().strip()
+        try:
+            session = get_authenticated_session(acc['email'], acc['password'], chat_id)
+            if not session:
+                continue
+            tasks = fetch_confirmed_tasks(session)
+            _known_confirmed_ids[(chat_id, email_lower)] = {t['id'] for t in tasks}
+        except Exception:
+            continue
+
+
+def handle_task_taken_for_templates(chat_id, email, password):
+    """
+    بتتنادى فورًا بعد أي اصطحاب ناجح (لو زر 'تمرير تنفيذ بعد الاصطحاب'
+    شغال بس). بتقارن قائمة المهام المصطحبة الحالية بالـ baseline المحفوظ،
+    وأي ID جديد ظهر (يعني المهمة اللي لسه اتاخدت) بيتفحص فورًا مقابل
+    القوالب. لو فيه تطابق، مش بيتنفذ فورًا — بيستنى مهلة عشوائية بين 9
+    و20 دقيقة الأول، وبعدين يبعت التقرير. لو مفيش تطابق، تُترك المهمة
+    دون أي تدخل.
+    """
+    email_lower = email.lower().strip()
+    try:
+        session = get_authenticated_session(email, password, chat_id)
+        if not session:
+            return
+        tasks = fetch_confirmed_tasks(session)
+        current_ids = {t['id'] for t in tasks}
+        known = _known_confirmed_ids.get((chat_id, email_lower), set())
+        newly_appeared = current_ids - known
+        _known_confirmed_ids[(chat_id, email_lower)] = current_ids
+
+        for task_id in newly_appeared:
+            status, matched_data = find_template_match_for_task(session, chat_id, task_id)
+            if status != "MATCHED":
+                continue  # مفيش تطابق — تُترك المهمة دون أي تدخل
+
+            delay_seconds = random.randint(9 * 60, 20 * 60)
+            threading.Thread(
+                target=_delayed_template_submit,
+                args=(chat_id, email, password, task_id, matched_data, delay_seconds),
+                daemon=True
+            ).start()
+    except Exception as e:
+        print(f"[TEMPLATE] خطأ في الفحص بعد الاصطحاب: {e}")
+
+
+def _delayed_template_submit(chat_id, email, password, task_id, matched_data, delay_seconds):
+    """بتستنى المهلة العشوائية المحسوبة، وبعدين تبعت تقرير المهمة."""
+    time.sleep(delay_seconds)
+    try:
+        session = get_authenticated_session(email, password, chat_id)
+        if not session:
+            return
+        status = submit_task_report(session, task_id, matched_data["url"], matched_data["message"])
+        if status == "SUCCESS":
+            try:
+                bot.send_message(
+                    chat_id,
+                    f"🤖 **تمرير تنفيذ بعد الاصطحاب**\n\n"
+                    f"✅ تم تنفيذ المهمة #{task_id} تلقائيًا بعد مهلة {delay_seconds // 60} دقيقة."
+                )
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"[TEMPLATE] خطأ في التنفيذ المؤجل للمهمة {task_id}: {e}")
+
 # ==========================================
 # 🔥 الواجهات
 # ==========================================
@@ -654,8 +956,43 @@ def get_auth_menu(chat_id=None):
     ))
     return markup
 
-def get_main_menu_text() -> str:
-    return f"🏠 القائمة الرئيسية  {get_countdown_text()}\nــــــــــــــــــ"
+# ==========================================
+# 🌐 الـ IP الحقيقي الحالي (IP الهاتف نفسه — بدون بروكسي)
+# ==========================================
+_current_ip_cache = {"ip": None, "ts": 0}
+IP_CACHE_TTL_SECONDS = 20  # كاش قصير جدًا عشان يفضل حقيقي وحديث، مش IP قديم من وقت تسجيل الدخول
+
+
+def get_current_public_ip():
+    """
+    بترجع الـ IP الحقيقي الحالي اللي البوت شغال بيه فعليًا دلوقتي (IP
+    الهاتف نفسه، مفيش بروكسي). بتتحدث تلقائيًا كل {IP_CACHE_TTL_SECONDS}
+    ثانية بس — مش بترجع IP قديم متخزن من وقت تسجيل الدخول، وبتشتغل حتى
+    لو الحساب جديد أو مجهول (لأن الـ IP مالوش علاقة بالحساب نفسه، هو IP
+    الجهاز اللي البوت شغال عليه).
+    """
+    now = time.time()
+    if _current_ip_cache["ip"] and (now - _current_ip_cache["ts"]) < IP_CACHE_TTL_SECONDS:
+        return _current_ip_cache["ip"]
+    try:
+        r = requests.get("https://api.ipify.org?format=json", timeout=5)
+        ip = r.json().get("ip") or "غير معروف"
+    except Exception:
+        # لو الطلب فشل، منرجعش IP قديم مكذوب — إما آخر قيمة معروفة أو "غير معروف"
+        ip = _current_ip_cache["ip"] or "غير معروف"
+    _current_ip_cache["ip"] = ip
+    _current_ip_cache["ts"] = now
+    return ip
+
+
+def get_main_menu_text(chat_id=None) -> str:
+    text = f"🏠 القائمة الرئيسية  {get_countdown_text()}\nــــــــــــــــــ"
+    if chat_id and chat_id in user_data_store:
+        email = user_data_store[chat_id].get('email', '')
+        if email:
+            ip = get_current_public_ip()
+            text += f"\n{email}\nIp: {ip}"
+    return text
 
 def get_main_menu(chat_id):
     markup = types.InlineKeyboardMarkup(row_width=1)
@@ -673,6 +1010,12 @@ def get_main_menu(chat_id):
     ))
     markup.add(types.InlineKeyboardButton(
         "🎯 اصطحاب للعمل (GT / GTE)", callback_data="take_work_menu"
+    ))
+    markup.add(types.InlineKeyboardButton(
+        "✅ تنفيذ مهام", callback_data="submit_tasks_menu"
+    ))
+    markup.add(types.InlineKeyboardButton(
+        "🤖 تنفيذ عبر القوالب", callback_data="template_menu"
     ))
     return markup
 
@@ -717,11 +1060,136 @@ def get_take_work_menu(chat_id):
     markup.add(types.InlineKeyboardButton("🔙 رجوع", callback_data="back_main"))
     return markup
 
+def get_template_menu(chat_id):
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    scan_on  = template_scan_status.get(chat_id, False)
+    delay_on = template_delay_status.get(chat_id, False)
+    markup.add(types.InlineKeyboardButton(
+        f"تنفيذ المهام (الحالية)  {'🟢' if scan_on else '🔴'}",
+        callback_data="template_scan_toggle"
+    ))
+    markup.add(types.InlineKeyboardButton(
+        f"تمرير تنفيذ بعد الاصطحاب  {'🟢' if delay_on else '🔴'}",
+        callback_data="template_delay_toggle"
+    ))
+    markup.add(types.InlineKeyboardButton(
+        "📎 إضافة ملف قاعدة بيانات", callback_data="template_upload_start"
+    ))
+    markup.add(types.InlineKeyboardButton(
+        "🗑️ حذف ملف قاعدة بيانات", callback_data="template_delete"
+    ))
+    markup.add(types.InlineKeyboardButton("🔙 رجوع", callback_data="back_main"))
+    return markup
+
 # ==========================================
 # 🔄 الخيط الخلفي
 # ==========================================
 _bg_last_hunt = {}
 _bg_last_take = {}
+
+HUNT_INTERVAL_SECONDS = 80  # مهلة جلب المهام لكل حساب
+
+def recompute_hunt_stagger(chat_id):
+    """
+    توزّع بداية دورة الـ80 ثانية بالتساوي بين حسابات نفس الشات، ميكانيكيًا:
+    لو عندك N حساب، الفرق بين بداية كل حساب واللي بعده = 80/N ثانية،
+    مع بقاء كل حساب بيتفحص كل 80 ثانية بالظبط زي ما هو.
+    مثال (N=4): حساب1 فورًا، حساب2 بعد 20ث، حساب3 بعد 40ث، حساب4 بعد 60ث.
+    بتتنادى تلقائيًا كل ما يتضاف أو يتحذف حساب في الشات.
+    """
+    saved = get_saved_multi_accounts(chat_id)
+    n = len(saved)
+    if n == 0:
+        return
+    spacing = HUNT_INTERVAL_SECONDS / n
+    now = time.time()
+    for i, acc in enumerate(saved):
+        email_lower = acc['email']  # متخزن بالفعل lower-case في save_multi_account
+        key = (chat_id, email_lower)
+        offset = i * spacing
+        # أول فحص لهذا الحساب هيحصل تحديدًا بعد offset ثانية من دلوقتي
+        _bg_last_hunt[key] = now - (HUNT_INTERVAL_SECONDS - offset)
+
+
+WAKE_MAX_PER_BURST = 2  # أقصى عدد مرات "إيقاظ" مبكر مسموح بيها للحساب خلال نفس الدفعة
+_wake_count       = {}  # key -> عدد مرات الإيقاظ في الدفعة الحالية
+_wake_burst_start = {}  # key -> وقت أول إيقاظ في الدفعة الحالية
+
+RESTAGGER_DELAY_SECONDS = 15  # وقت كافي لكل الحسابات الموقظة تعمل فحصها الفوري قبل ما نعيد التنظيم
+_pending_restagger      = set()  # chat_ids فيها إعادة تنظيم مجدولة بالفعل (لمنع التكرار)
+_pending_restagger_lock = threading.Lock()
+
+
+def _schedule_restagger(chat_id):
+    """
+    بعد أي دفعة إيقاظ، الحسابات بتتجمع كلها قريب من بعض بدل التوزيع
+    المتباعد الأصلي (0، 20، 40، 60 ثانية...). الدالة دي بتجدول إعادة
+    توزيع (recompute_hunt_stagger) بعد فترة قصيرة كافية إن كل حساب
+    اتوقظ يكون خلص فحصه الفوري، فيرجعوا يشتغلوا منظمين تاني بنفس الفارق
+    (80 ÷ عدد الحسابات) — بس محسوب من اللحظة دي كخط أساس جديد.
+    مفيش تكرار: لو فيه إعادة تنظيم مجدولة بالفعل لنفس الشات، مبنجدولش تانية.
+    """
+    with _pending_restagger_lock:
+        if chat_id in _pending_restagger:
+            return
+        _pending_restagger.add(chat_id)
+
+    def _do():
+        try:
+            time.sleep(RESTAGGER_DELAY_SECONDS)
+            recompute_hunt_stagger(chat_id)
+        finally:
+            with _pending_restagger_lock:
+                _pending_restagger.discard(chat_id)
+
+    threading.Thread(target=_do, daemon=True).start()
+
+
+def _wake_other_accounts(chat_id, current_email_lower):
+    """
+    لما حساب يكتشف مهمة موجودة فعلاً، الدالة دي بتخلي باقي حسابات نفس
+    الشات تحاول تصطحب فورًا (في أقرب دورة فحص خلال 5 ثواني بالأكتر)، من
+    غير ما تستنى الـ80 ثانية بتاعتها تكتمل.
+
+    عشان مايحصلش تكديس طلبات سريعة على بعض (لو ظهرت كذا مهمة قريب من
+    بعض واستفزت أكتر من حساب ينبّه في نفس الوقت) ويزوّد احتمال ظهور
+    captcha، كل حساب مسموح له بإيقاظ مبكر مرتين بس خلال أي نافذة 80
+    ثانية. أي محاولة إيقاظ تالتة قبل ما الـ80 ثانية تكتمل بتتجاهل تمامًا،
+    فالحساب يرجع ياخد مهلته الطبيعية كاملة.
+
+    وبعد أي إيقاظ فعلي، بتتجدول إعادة توزيع (شوف _schedule_restagger)
+    عشان الحسابات ترجع تشتغل بفارق (80 ÷ عدد الحسابات) منظم زي الأصل،
+    بدل ما تفضل متكدسة قريب من بعض بعد التنبيه.
+    """
+    with active_accounts_lock:
+        accounts = dict(active_accounts.get(chat_id, {}))
+    now = time.time()
+    woke_anyone = False
+    for email_key in accounts.keys():
+        if email_key == current_email_lower:
+            continue
+        key = (chat_id, email_key)
+
+        burst_start = _wake_burst_start.get(key)
+        count = _wake_count.get(key, 0)
+
+        # عدت 80 ثانية من أول إيقاظ في الدفعة الحالية؟ ابدأ عدّ جديد من الصفر
+        if burst_start is None or (now - burst_start) >= HUNT_INTERVAL_SECONDS:
+            burst_start = now
+            count = 0
+
+        if count >= WAKE_MAX_PER_BURST:
+            continue  # اتنبه كفاية — سيبه ياخد مهلته الطبيعية
+
+        _bg_last_hunt[key] = 0
+        count += 1
+        _wake_count[key] = count
+        _wake_burst_start[key] = burst_start
+        woke_anyone = True
+
+    if woke_anyone:
+        _schedule_restagger(chat_id)
+
 
 _same_ip_blocked_tasks = {}
 _same_ip_blocked_lock  = threading.Lock()
@@ -764,17 +1232,20 @@ def _extract_task_id(task_page_url):
     return task_page_url  
 
 def _bg_process_one_account_inner(chat_id, email, password, current_time):
-    key = (chat_id, email)
     e = email.lower().strip()
+    key = (chat_id, e)
     settings = get_email_settings(email)
 
     if settings['auto_hunt_status']:
         last_take = _bg_last_take.get(key, 0)
         if current_time - last_take >= TAKE_COOLDOWN:
-            if current_time - _bg_last_hunt.get(key, 0) >= 80:
+            if current_time - _bg_last_hunt.get(key, 0) >= HUNT_INTERVAL_SECONDS:
                 _bg_last_hunt[key] = current_time
                 data, status = get_site_data(email, password, chat_id)
                 if status == "SUCCESS" and data and data['tasks']:
+                    # 🔔 فيه مهمة موجودة فعلاً — نبّه باقي حسابات نفس الشات
+                    # يحاولوا يصطحبوا فورًا من غير انتظار دورتهم الطبيعية.
+                    _wake_other_accounts(chat_id, e)
                     mode = settings['hunt_mode']
                     for target_task in data['tasks']:
                         task_id = _extract_task_id(target_task['task_page'])
@@ -787,26 +1258,10 @@ def _bg_process_one_account_inner(chat_id, email, password, current_time):
                         if should_take:
                             session = get_authenticated_session(email, password, chat_id)
                             if session:
-                                # تحديث البروكسي لحظياً بالتوازي فوراً عند استلام المهمة لضمان السرعة القصوى وعدم هروبها
-                                if e in EXEMPT_ACCOUNTS:
-                                    fast_proxy_url = get_fastest_proxy_exempt(e)
-                                    if fast_proxy_url:
-                                        session.proxies = {"http": fast_proxy_url, "https": fast_proxy_url}
-
-                                if not _session_has_proxy_attached(session, email):
-                                    try:
-                                        bot.send_message(
-                                            chat_id,
-                                            f"🚫 **تنبيه: تعذّر الاصطحاب**\n\n"
-                                            f"👤 الحساب: {e.split('@')[0]}\n"
-                                            f"🛑 لا يوجد اتصال ناجح بأي بروكسي حالياً، ولن يتم الاصطحاب بالـ IP الأصلي إطلاقاً.\n"
-                                            f"🔁 سيُعاد المحاولة تلقائياً عند توفر بروكسي شغّال."
-                                        )
-                                    except Exception:
-                                        pass
-                                    break
-
-                                take_status = take_task_via_post(session, target_task['task_page'])
+                                # 🌐 لا بروكسي هنا — الاتصال بيمشي على IP الهاتف مباشرة
+                                take_status = take_task_via_post(
+                                    session, target_task['task_page']
+                                )
                                 if take_status == "SUCCESS":
                                     _bg_last_take[key] = time.time()
                                     try:
@@ -819,6 +1274,14 @@ def _bg_process_one_account_inner(chat_id, email, password, current_time):
                                         )
                                     except Exception:
                                         pass
+                                    # 🤖 لو زر "تنفيذ تلقائي عبر القوالب" شغال، مرّر المهمة دي
+                                    # للفحص فورًا (من غير مهلة، ماشي مع حدث الاصطحاب نفسه)
+                                    if template_delay_status.get(chat_id, False):
+                                        threading.Thread(
+                                            target=handle_task_taken_for_templates,
+                                            args=(chat_id, email, password),
+                                            daemon=True
+                                        ).start()
                                 elif take_status == "SAME_IP":
                                     _add_blocked_task(e, task_id)
                                     try:
@@ -886,7 +1349,8 @@ def _handle_callback_inner(call):
 
     if chat_id in user_sessions:
         step = user_sessions[chat_id].get('step', '')
-        if step in ['WAITING_EMAIL', 'WAITING_PASSWORD', 'WAITING_DELETE_ACCOUNT']:
+        if step in ['WAITING_EMAIL', 'WAITING_PASSWORD', 'WAITING_DELETE_ACCOUNT',
+                    'WAITING_REPORT_URL', 'WAITING_REPORT_MESSAGE']:
             del user_sessions[chat_id]
 
     if data.startswith("switch_acc_"):
@@ -914,11 +1378,11 @@ def _handle_callback_inner(call):
             bot.answer_callback_query(call.id)
             try:
                 bot.edit_message_text(
-                    get_main_menu_text(), chat_id, message_id,
+                    get_main_menu_text(chat_id), chat_id, message_id,
                     reply_markup=get_main_menu(chat_id)
                 )
             except Exception:
-                bot.send_message(chat_id, get_main_menu_text(),
+                bot.send_message(chat_id, get_main_menu_text(chat_id),
                                  reply_markup=get_main_menu(chat_id))
         else:
             bot.answer_callback_query(call.id, "⚠️ خطأ.", show_alert=True)
@@ -1008,7 +1472,7 @@ def _handle_callback_inner(call):
         bot.answer_callback_query(call.id)
         try:
             bot.edit_message_text(
-                get_main_menu_text(), chat_id, message_id,
+                get_main_menu_text(chat_id), chat_id, message_id,
                 reply_markup=get_main_menu(chat_id)
             )
         except Exception:
@@ -1049,6 +1513,7 @@ def _handle_callback_inner(call):
                 msg += (f"\n📊 **الإحصائيات:**\n"
                         f"🟡 قيد التنفيذ: {result['stats']['to_execute']}\n"
                         f"🔵 قيد المراجعة: {result['stats']['on_check']}\n"
+                        f"⚖️ التحكيم: {result['stats']['arbitration']}\n"
                         f"✅ مكتملة: {result['stats']['completed']}")
                 markup = types.InlineKeyboardMarkup()
                 markup.add(types.InlineKeyboardButton("🔄 تحديث", callback_data="view_tasks"))
@@ -1136,6 +1601,338 @@ def _handle_callback_inner(call):
         except Exception:
             pass
 
+    elif data == "submit_tasks_menu":
+        bot.answer_callback_query(call.id)
+        creds = user_data_store.get(chat_id)
+        if not creds:
+            try:
+                bot.edit_message_text(
+                    "⚠️ يرجى تسجيل الدخول أولاً.",
+                    chat_id, message_id,
+                    reply_markup=get_auth_menu(chat_id)
+                )
+            except Exception:
+                pass
+            return
+        try:
+            bot.edit_message_text("⏳ جارٍ جلب المهام المصطحبة...", chat_id, message_id)
+        except Exception:
+            pass
+
+        def _do_submit_menu():
+            session = get_authenticated_session(creds['email'], creds['password'], chat_id)
+            if not session:
+                err_markup = types.InlineKeyboardMarkup()
+                err_markup.add(types.InlineKeyboardButton("🔙 رجوع", callback_data="back_main"))
+                try:
+                    bot.edit_message_text("⚠️ فشل تسجيل الدخول.",
+                                          chat_id, message_id, reply_markup=err_markup)
+                except Exception:
+                    pass
+                return
+            tasks = fetch_confirmed_tasks(session)
+            markup = types.InlineKeyboardMarkup(row_width=1)
+            if tasks:
+                for t in tasks[:15]:
+                    label = (f"{t['title']} — متبقي {t['remaining']}"
+                             if t['remaining'] else t['title'])
+                    markup.add(types.InlineKeyboardButton(
+                        label, callback_data=f"submit_task_{t['id']}"
+                    ))
+                msg = "✅ **اختر المهمة اللي عايز تنفّذها (ترسل تقرير الإنجاز):**"
+            else:
+                msg = "🟢 مفيش مهام مصطحبة محتاجة تنفيذ حالياً."
+            markup.add(types.InlineKeyboardButton("🔙 رجوع", callback_data="back_main"))
+            try:
+                bot.edit_message_text(msg, chat_id, message_id,
+                                     parse_mode="Markdown", reply_markup=markup)
+            except Exception:
+                bot.send_message(chat_id, msg, parse_mode="Markdown", reply_markup=markup)
+
+        threading.Thread(target=_do_submit_menu, daemon=True).start()
+
+    elif data.startswith("submit_task_"):
+        bot.answer_callback_query(call.id)
+        task_id = data.replace("submit_task_", "")
+        if chat_id in user_transient_messages:
+            try:
+                bot.delete_message(chat_id, user_transient_messages[chat_id])
+            except Exception:
+                pass
+        msg = bot.send_message(chat_id, "🔗 أدخل الرابط اللي نفذت فيه المهمة (Где выполнено):")
+        user_transient_messages[chat_id] = msg.message_id
+        user_sessions[chat_id] = {'step': 'WAITING_REPORT_URL', 'task_id': task_id}
+
+    elif data.startswith("captcha_resolved_"):
+        email_lower = data.replace("captcha_resolved_", "")
+        acct_auto_hunt_status[email_lower] = True
+
+        # لو الحساب ده هو النشط حاليًا في الشات، رجّع مزامنة حالة أزرار GT/GTE معاه
+        active_email = user_data_store.get(chat_id, {}).get('email', '').lower().strip()
+        if active_email == email_lower:
+            sync_email_settings_to_chat(chat_id, email_lower)
+
+        bot.answer_callback_query(call.id, "✅ تم إرجاع الحساب للعمل")
+        try:
+            bot.edit_message_text(
+                f"✅ **تم إرجاع الحساب `{email_lower}` للاصطحاب العادي.**",
+                chat_id, message_id, parse_mode="Markdown"
+            )
+        except Exception:
+            pass
+
+    elif data == "template_menu":
+        bot.answer_callback_query(call.id)
+        try:
+            bot.edit_message_text(
+                "🤖 **القوالب**\nــــــــــــــــــ",
+                chat_id, message_id,
+                reply_markup=get_template_menu(chat_id),
+                parse_mode="Markdown"
+            )
+        except Exception:
+            pass
+
+    elif data == "template_scan_toggle":
+        bot.answer_callback_query(call.id)
+        creds = user_data_store.get(chat_id)
+        if not creds:
+            try:
+                bot.edit_message_text(
+                    "⚠️ يرجى تسجيل الدخول أولاً.",
+                    chat_id, message_id,
+                    reply_markup=get_auth_menu(chat_id)
+                )
+            except Exception:
+                pass
+            return
+
+        currently_on = template_scan_status.get(chat_id, False)
+
+        if not currently_on:
+            db = get_template_db_for_chat(chat_id)
+            if not db:
+                try:
+                    bot.edit_message_text(
+                        "🚫 **يرجى إضافة ملف قاعدة بيانات (.txt) أولاً لتتمكن من تشغيل الخدمة.**",
+                        chat_id, message_id,
+                        parse_mode="Markdown", reply_markup=get_template_menu(chat_id)
+                    )
+                except Exception:
+                    pass
+                return  # الزر بيفضل 🔴 لأن التفعيل اتلغى
+
+            template_scan_status[chat_id] = True
+            stop_event = threading.Event()
+            template_scan_stop_events[chat_id] = stop_event
+            try:
+                bot.edit_message_text(
+                    "✅ **تم تشغيل تنفيذ المهام**\n"
+                    "🔍 جاري فحص المهام المصطحبة حالياً مقابل قاعدة البيانات...",
+                    chat_id, message_id,
+                    parse_mode="Markdown", reply_markup=get_template_menu(chat_id)
+                )
+            except Exception:
+                pass
+
+            def _run_scan():
+                session = get_authenticated_session(creds['email'], creds['password'], chat_id)
+                if not session:
+                    template_scan_status[chat_id] = False
+                    template_scan_stop_events.pop(chat_id, None)
+                    bot.send_message(chat_id, "❌ فشل تسجيل الدخول، حاول تاني.",
+                                     reply_markup=get_template_menu(chat_id))
+                    return
+
+                # المرحلة 1: فحص كل المهام الحالية مقابل القاعدة (من غير أي تنفيذ بعد)
+                scan_result = scan_and_match_all_tasks(session, chat_id, stop_event=stop_event)
+                if scan_result.get("error") == "no_db":
+                    template_scan_status[chat_id] = False
+                    template_scan_stop_events.pop(chat_id, None)
+                    bot.send_message(chat_id, "📎 مفيش ملف قاعدة بيانات مرفوع.",
+                                     reply_markup=get_template_menu(chat_id))
+                    return
+
+                matched_list = scan_result["matched_list"]
+                stats = scan_result["stats"]
+
+                if not matched_list:
+                    template_scan_status[chat_id] = False
+                    template_scan_stop_events.pop(chat_id, None)
+                    note = " (تم إيقاف الفحص يدويًا)" if stats.get("stopped") else ""
+                    bot.send_message(
+                        chat_id,
+                        f"🔴 **لا توجد مهام مطابقة حاليًا{note}**\n"
+                        f"📋 تم فحص {stats['total']} مهمة من غير أي تطابق.",
+                        parse_mode="Markdown", reply_markup=get_template_menu(chat_id)
+                    )
+                    return
+
+                # المرحلة 2: إعلان عدد المهام المطابقة اللي هتتنفذ
+                try:
+                    bot.send_message(
+                        chat_id,
+                        f"🎯 **تم العثور على {len(matched_list)} مهمة مطابقة من إجمالي {stats['total']}**\n\n"
+                        f"⏳ جاري تنفيذها الآن واحدة واحدة (بفاصل عشوائي 3-20 ثانية بين كل مهمة والتانية)...",
+                        parse_mode="Markdown"
+                    )
+                except Exception:
+                    pass
+
+                # المرحلة 3: تنفيذ كل مهمة مطابقة، بفارق عشوائي 3-20 ثانية بين كل مهمة والتانية
+                submitted = 0
+                failed = 0
+                stopped_mid = False
+                for i, (task_id, matched_data) in enumerate(matched_list):
+                    if stop_event.is_set():
+                        stopped_mid = True
+                        break
+
+                    status = submit_task_report(session, task_id,
+                                                matched_data["url"], matched_data["message"])
+                    if status == "SUCCESS":
+                        submitted += 1
+                    elif status == "BLOCKED":
+                        threading.Thread(target=handle_blocked_account,
+                                         args=(creds['email'],), daemon=True).start()
+                        failed += 1
+                        break
+                    else:
+                        failed += 1
+
+                    if i < len(matched_list) - 1:
+                        gap = random.randint(3, 20)
+                        gap_waited = 0
+                        while gap_waited < gap:
+                            if stop_event.is_set():
+                                stopped_mid = True
+                                break
+                            time.sleep(1)
+                            gap_waited += 1
+                        if stopped_mid:
+                            break
+
+                template_scan_status[chat_id] = False
+                template_scan_stop_events.pop(chat_id, None)
+
+                stopped_note = " (تم إيقافه يدويًا أثناء التنفيذ)" if stopped_mid else ""
+                summary = (
+                    f"🔴 **انتهى تنفيذ المهام{stopped_note}**\n\n"
+                    f"🎯 مطابقة: {len(matched_list)}\n"
+                    f"✅ تم تنفيذها فعليًا: {submitted}\n"
+                    f"❌ فشل: {failed}\n"
+                    f"🖼️ من غير صورة: {stats['no_image']}\n"
+                    f"🔍 غير مطابقة: {stats['no_match']}\n"
+                    f"⏭️ متخطاة (كاش): {stats['cached']}"
+                )
+                bot.send_message(chat_id, summary, parse_mode="Markdown",
+                                 reply_markup=get_template_menu(chat_id))
+
+            threading.Thread(target=_run_scan, daemon=True).start()
+
+        else:
+            # إيقاف فوري وسلس: نضبط علم التوقف، والحلقة بتخرج بعد المهمة الحالية بس
+            stop_event = template_scan_stop_events.get(chat_id)
+            if stop_event:
+                stop_event.set()
+            template_scan_status[chat_id] = False
+            try:
+                bot.edit_message_text(
+                    "🔴 **تم إيقاف تنفيذ المهام**",
+                    chat_id, message_id,
+                    parse_mode="Markdown", reply_markup=get_template_menu(chat_id)
+                )
+            except Exception:
+                pass
+
+    elif data == "template_delay_toggle":
+        bot.answer_callback_query(call.id)
+        creds = user_data_store.get(chat_id)
+        if not creds:
+            try:
+                bot.edit_message_text(
+                    "⚠️ يرجى تسجيل الدخول أولاً.",
+                    chat_id, message_id,
+                    reply_markup=get_auth_menu(chat_id)
+                )
+            except Exception:
+                pass
+            return
+
+        currently_on = template_delay_status.get(chat_id, False)
+
+        if not currently_on:
+            db = get_template_db_for_chat(chat_id)
+            if not db:
+                try:
+                    bot.edit_message_text(
+                        "🚫 **يرجى إضافة ملف قاعدة بيانات (.txt) أولاً لتتمكن من تشغيل الخدمة.**",
+                        chat_id, message_id,
+                        parse_mode="Markdown", reply_markup=get_template_menu(chat_id)
+                    )
+                except Exception:
+                    pass
+                return
+
+            template_delay_status[chat_id] = True
+            threading.Thread(target=_snapshot_confirmed_baseline,
+                             args=(chat_id,), daemon=True).start()
+            status_msg = "✅ تم تشغيل تمرير التنفيذ بعد الاصطحاب (مهلة 9–20 دقيقة عشوائية)"
+        else:
+            template_delay_status[chat_id] = False
+            status_msg = "🔴 تم إيقاف تمرير التنفيذ بعد الاصطحاب"
+
+        try:
+            bot.edit_message_text(
+                f"🤖 **القوالب**\n{status_msg}\nــــــــــــــــــ",
+                chat_id, message_id,
+                reply_markup=get_template_menu(chat_id),
+                parse_mode="Markdown"
+            )
+        except Exception:
+            pass
+
+    elif data == "template_upload_start":
+        bot.answer_callback_query(call.id)
+        msg = bot.send_message(
+            chat_id,
+            "📎 ابعتلي دلوقتي ملف قاعدة البيانات (.txt) كمرفق (Document) هنا في الشات."
+        )
+        user_transient_messages[chat_id] = msg.message_id
+
+    elif data == "template_delete":
+        bot.answer_callback_query(call.id)
+        existed = delete_template_db_file(chat_id)
+
+        # وقف أي خدمة شغالة كانت معتمدة على الملف ده
+        stopped_services = []
+        if template_scan_status.get(chat_id, False):
+            ev = template_scan_stop_events.get(chat_id)
+            if ev:
+                ev.set()
+            template_scan_status[chat_id] = False
+            stopped_services.append("تنفيذ المهام")
+        if template_delay_status.get(chat_id, False):
+            template_delay_status[chat_id] = False
+            stopped_services.append("تمرير تنفيذ بعد الاصطحاب")
+
+        if existed:
+            msg = "🗑️ تم حذف ملف قاعدة البيانات بنجاح."
+            if stopped_services:
+                msg += f"\n⚠️ تم إيقاف: {', '.join(stopped_services)} تلقائيًا لاعتمادهم على الملف."
+        else:
+            msg = "ℹ️ مفيش ملف قاعدة بيانات مرفوع أصلاً."
+
+        try:
+            bot.edit_message_text(
+                f"🤖 **القوالب**\n{msg}\nــــــــــــــــــ",
+                chat_id, message_id,
+                reply_markup=get_template_menu(chat_id),
+                parse_mode="Markdown"
+            )
+        except Exception:
+            pass
+
 # ==========================================
 # 📨 معالجة الرسائل
 # ==========================================
@@ -1164,7 +1961,7 @@ def _handle_message_inner(message):
         remove_kb = types.ReplyKeyboardRemove()
         if chat_id in user_data_store or get_saved_multi_accounts(chat_id):
             bot.send_message(chat_id, "مرحباً ⚙️", reply_markup=remove_kb)
-            bot.send_message(chat_id, get_main_menu_text(),
+            bot.send_message(chat_id, get_main_menu_text(chat_id),
                              reply_markup=get_main_menu(chat_id))
         else:
             bot.send_message(chat_id, "مرحباً.", reply_markup=remove_kb)
@@ -1210,6 +2007,7 @@ def _handle_message_inner(message):
                 save_multi_account(chat_id, email, password)
                 register_account_in_active(chat_id, email, password)
                 sync_chat_settings_to_email(chat_id, email)
+                recompute_hunt_stagger(chat_id)
                 with auth_sessions_lock:
                     user_auth_sessions[email_lower] = session
                 with logged_out_lock:
@@ -1269,8 +2067,10 @@ def _handle_message_inner(message):
             with active_accounts_lock:
                 if chat_id in active_accounts:
                     active_accounts[chat_id].pop(email_del, None)
-            threading.Thread(target=delete_multi_account,
-                             args=(chat_id, email_del), daemon=True).start()
+            delete_multi_account(chat_id, email_del)
+            recompute_hunt_stagger(chat_id)
+            _bg_last_hunt.pop((chat_id, email_del), None)
+            _bg_last_take.pop((chat_id, email_del), None)
             with auth_sessions_lock:
                 user_auth_sessions.pop(email_del, None)
 
@@ -1288,6 +2088,74 @@ def _handle_message_inner(message):
             )
             return
 
+        elif step == 'WAITING_REPORT_URL':
+            if chat_id in user_transient_messages:
+                try:
+                    bot.delete_message(chat_id, user_transient_messages[chat_id])
+                except Exception:
+                    pass
+            user_sessions[chat_id]['report_url'] = text
+            user_sessions[chat_id]['step'] = 'WAITING_REPORT_MESSAGE'
+            msg = bot.send_message(
+                chat_id,
+                "📝 أدخل أي ملاحظات إضافية (اختياري) — أو أرسل '-' لو مفيش:"
+            )
+            user_transient_messages[chat_id] = msg.message_id
+            return
+
+        elif step == 'WAITING_REPORT_MESSAGE':
+            if chat_id in user_transient_messages:
+                try:
+                    bot.delete_message(chat_id, user_transient_messages[chat_id])
+                except Exception:
+                    pass
+            task_id    = user_sessions[chat_id].get('task_id')
+            report_url = user_sessions[chat_id].get('report_url', '')
+            report_msg = "" if text.strip() == "-" else text
+            del user_sessions[chat_id]
+
+            creds = user_data_store.get(chat_id)
+            if not creds:
+                bot.send_message(chat_id, "⚠️ يرجى تسجيل الدخول أولاً.",
+                                 reply_markup=get_auth_menu(chat_id))
+                return
+
+            status_msg = bot.send_message(chat_id, "⏳ جاري إرسال التقرير...")
+
+            def _do_submit_report():
+                session = get_authenticated_session(creds['email'], creds['password'], chat_id)
+                try:
+                    bot.delete_message(chat_id, status_msg.message_id)
+                except Exception:
+                    pass
+                if not session:
+                    bot.send_message(chat_id, "❌ فشل تسجيل الدخول، حاول تاني.",
+                                     reply_markup=get_main_menu(chat_id))
+                    return
+                result = submit_task_report(session, task_id, report_url, report_msg)
+                if result == "SUCCESS":
+                    bot.send_message(
+                        chat_id,
+                        f"✅ **تم إرسال تقرير المهمة #{task_id} بنجاح**",
+                        parse_mode="Markdown",
+                        reply_markup=get_main_menu(chat_id)
+                    )
+                elif result == "BLOCKED":
+                    threading.Thread(target=handle_blocked_account,
+                                     args=(creds['email'],), daemon=True).start()
+                elif result == "CAPTCHA":
+                    threading.Thread(target=handle_captcha_detected,
+                                     args=(creds['email'], "إرسال تقرير"), daemon=True).start()
+                else:
+                    bot.send_message(
+                        chat_id,
+                        f"❌ فشل إرسال تقرير المهمة #{task_id}، حاول تاني.",
+                        reply_markup=get_main_menu(chat_id)
+                    )
+
+            threading.Thread(target=_do_submit_report, daemon=True).start()
+            return
+
     if "@" in text and chat_id not in user_data_store:
         if chat_id in user_transient_messages:
             try:
@@ -1297,6 +2165,48 @@ def _handle_message_inner(message):
         user_sessions[chat_id] = {'step': 'WAITING_PASSWORD', 'email': text}
         msg = bot.send_message(chat_id, "🔐 أدخل كلمة المرور:")
         user_transient_messages[chat_id] = msg.message_id
+
+
+@bot.message_handler(content_types=['document'])
+def handle_template_document(message):
+    """
+    استقبال ملف قاعدة القوالب (نفس صيغة F_C_NOWE.txt) كمرفق في الشات —
+    بديل إرسال الملف من تخزين الهاتف المحلي بما إننا بقينا على استضافة.
+    """
+    chat_id = message.chat.id
+    try:
+        doc = message.document
+        filename = (doc.file_name or "").lower()
+        if not filename.endswith(".txt"):
+            bot.reply_to(message, "⚠️ محتاج ملف نصي (.txt) بصيغة قاعدة القوالب.")
+            return
+
+        file_info = bot.get_file(doc.file_id)
+        downloaded = bot.download_file(file_info.file_path)
+        db = save_template_db_file(chat_id, downloaded)
+
+        if not db:
+            bot.reply_to(
+                message,
+                "⚠️ تم استلام الملف لكن مفيش أي قالب اتفهم منه — تأكد إن الصيغة "
+                "زي مثال `F_C_NOWE.txt` (كل مهمة تبدأ بـ © ومفصولة زي المطلوب)."
+            )
+            return
+
+        bot.reply_to(
+            message,
+            f"✅ **تم استلام قاعدة القوالب بنجاح**\n\n"
+            f"📦 عدد القوالب المرجعية: {len(db)}\n"
+            f"اضغط \"🤖 تنفيذ عبر القوالب\" من القائمة الرئيسية عشان يبدأ التنفيذ.",
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        print(f"[TEMPLATE] خطأ في استلام الملف: {e}")
+        try:
+            bot.reply_to(message, "⚠️ حصل خطأ أثناء استلام الملف، حاول تاني.")
+        except Exception:
+            pass
+
 
 # ==========================================
 # 🖥️ السيرفر المساعد
@@ -1343,6 +2253,12 @@ def watchdog_thread():
 # ==========================================
 if __name__ == "__main__":
     print("🚀 تشغيل البوت...")
+
+    # تحميل تعيينات البروكسي + تعبئة أولية للمخزون — في Thread منفصل تمامًا،
+    # عشان الفحص (اللي بيعتمد على الإنترنت) ميعطلش استقبال رسائل تليجرام.
+    # البوت هيرد فورًا على /start حتى لو الفحص لسه شغال في الخلفية.
+    t_proxy_init = threading.Thread(target=_init_proxy_system, daemon=True)
+    t_proxy_init.start()
 
     t_worker = threading.Thread(target=global_background_worker, daemon=True)
     t_worker.start()
