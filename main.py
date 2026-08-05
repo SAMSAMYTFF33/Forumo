@@ -2,6 +2,125 @@ import asyncio
 import urllib.parse
 import aiohttp
 import json
+import time
+from telethon import TelegramClient
+from telethon.sessions import StringSession
+from telethon.tl.functions.messages import RequestWebViewRequest
+
+# بيانات الاعتماد
+API_ID = 31568734
+API_HASH = "7286e8c92ccc4dc698d771664bf71700"
+SESSION_STRING = "1BJWap1sBu3xkxXl8B-bm2JtFLqw_keauUJuL2BfxfJn1v6BK9KrWwaal3Grsa-Tv0n6Zxj1WND1oZp5V4EOof50uVm0wgzYJsKzuy6s2It38WKRSkR2eQiPxUPeddadiiMAl6KBQ9069f1fRa-XTvL6AJukxgNYj1epxydZbl3acI6jFlFBcCztjK2Y7Zdf5BncX9cdCeJPDb8JodIFP0DK2Dcu0R_aKRD-DHSnlpx_3iKoXssVKStG3F-OHwc2kNihH2eaRIdAQKFQgl18BhcxyF77LSEoBJJI7dZIr-obIQKkEbPYQfz_8qN4yYoYwx5PumU_mu7tIJ1MtbleH9Sr8kAap_j4="
+
+TARGET_BOT_USERNAME = "ATF_AIRDROP_bot"
+WEB_APP_URL = "https://atfminers.asloni.online/miner/index.html"
+BASE_URL = "https://atfminers.asloni.online"
+
+LOGIN_ENDPOINT = f"{BASE_URL}/miner/index.php?action=login"
+START_MINE_ENDPOINT = f"{BASE_URL}/miner/index.php?action=start_mine"
+ACTIVATE_BOOST_ENDPOINT = f"{BASE_URL}/miner/index.php?action=activate_boost"
+
+# زمن الانتظار: 9 ثوانٍ
+RETRY_INTERVAL = 9
+
+async def fetch_init_data(client, bot):
+    """استخراج initData جديد لتفادي انتهاء الصلاحية"""
+    web_view = await client(RequestWebViewRequest(
+        peer=bot, bot=bot, platform="android", from_bot_menu=True, url=WEB_APP_URL
+    ))
+    raw_url = web_view.url
+    if "#tgWebAppData=" in raw_url:
+        encoded = raw_url.split("#tgWebAppData=")[1].split("&")[0]
+    elif "tgWebAppData=" in raw_url:
+        encoded = raw_url.split("tgWebAppData=")[1].split("&")[0]
+    else:
+        return None
+    return urllib.parse.unquote(encoded)
+
+async def main():
+    print("🔄 جاري الاتصال بحساب التلغرام...")
+    async with TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH) as client:
+        me = await client.get_me()
+        print(f"✅ تم تسجيل الدخول: {me.first_name} (@{me.username or me.id})")
+        bot = await client.get_input_entity(TARGET_BOT_USERNAME)
+
+        while True:
+            try:
+                print("\n" + "="*40)
+                print("⚡ جاري إرسال طلب تفعيل التسريع...")
+                
+                init_data_decoded = await fetch_init_data(client, bot)
+                if not init_data_decoded:
+                    print("❌ تعذر استخراج initData. إعادة المحاولة بعد 9 ثوانٍ...")
+                    await asyncio.sleep(RETRY_INTERVAL)
+                    continue
+
+                base_headers = {
+                    "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36",
+                    "Content-Type": "application/json",
+                    "Accept": "application/json, text/plain, */*",
+                    "Origin": BASE_URL,
+                    "Referer": f"{BASE_URL}/miner/index.html",
+                    "X-Requested-With": "XMLHttpRequest",
+                    "X-Telegram-Init-Data": init_data_decoded,
+                }
+
+                base_payload = {
+                    "initData": init_data_decoded,
+                    "tg_id": me.id,
+                    "username": me.username or "",
+                    "request_id": f"rq-{int(time.time() * 1000)}-{me.id}",
+                    "device_id": f"dev-{me.id}-{int(time.time())}"
+                }
+
+                async with aiohttp.ClientSession() as session:
+                    # 1. تسجيل الدخول
+                    async with session.post(LOGIN_ENDPOINT, json=base_payload, headers=base_headers) as resp:
+                        login_data = await resp.json()
+                        if login_data.get("status") != "success":
+                            print(f"❌ فشل تسجيل الدخول: {login_data.get('message')}")
+                            await asyncio.sleep(RETRY_INTERVAL)
+                            continue
+                        tma_session_token = login_data.get("tma_session_token")
+
+                    claim_headers = base_headers.copy()
+                    claim_headers["X-ATF-TMA-Session"] = tma_session_token
+
+                    # 2. التأكد من بدء التعدين
+                    async with session.post(START_MINE_ENDPOINT, json=base_payload, headers=claim_headers) as resp:
+                        pass
+
+                    # 3. إرسال طلب التسريع (Boost)
+                    boost_payload = base_payload.copy()
+                    boost_payload["display_preview"] = "0.0000"
+
+                    async with session.post(ACTIVATE_BOOST_ENDPOINT, json=boost_payload, headers=claim_headers) as resp:
+                        boost_data = await resp.json()
+                        
+                        if boost_data.get("status") == "success":
+                            print("🎉 تم تفعيل التسريع بنجاح!")
+                            print(f"⚡ حالة التسريع: {boost_data.get('boost_active_until', 'نشط')}")
+                        else:
+                            msg = boost_data.get('message', 'المسرع نشط بالفعل أو التعدين غير جاهز')
+                            print(f"ℹ️ الاستجابة: {msg}")
+
+            except Exception as e:
+                print(f"💥 حدث خطأ غير متوقع: {e}")
+
+            print(f"⏳ الانتظار 9 ثوانٍ قبل المحاولة التالية...")
+            await asyncio.sleep(RETRY_INTERVAL)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
+
+
+
+
+import asyncio
+import urllib.parse
+import aiohttp
+import json
 import time 
 import random
 from telethon import TelegramClient
@@ -12,7 +131,7 @@ from cryptography.fernet import Fernet
 # ===================== البيانات المشفرة =====================
 KEY = b'oiL4Z8RZJ-znrlkJg0fKD0xuDqWQNxfK4pbPyJWONVw='
 
-ENC_SESSION = b'gAAAAABqcinpJArdkQQQs5PP4opqhCwLb-aOCBIMYWaCOIIi64YBC55xED_QhbANbqD-_VXg7DbABO2fSOhUXGC3gBS6_NFEfNJD-NdnVLjwqEAyLIA6E_LOlLpHTT-oLLywXTFTprBcmBPhwqJooV-TrUkJa7kVVO24Uu8l_TgT3AnozPtFBh45DRm4Yk8KSTeYN5O-7XYGJrVeozK1wNxUbWa9w_3cS0MZ6FA1JyyiVcBbXfRwYpNn1cM1EuRUFveZ7-uw87BFySXS_Frq9-Ozp0wFwzgjeOK1G3Yo1Fh6xEaDUnFFuJPqMTWcXAEvTrOW7vwJwkZq12mF4tVI0L3ErOI-LzpQ-XVCSEJXC4VjBkiSR5JDU_VtumU1v6pkAe6pGM57H4mPQrGw-4-TVzgGsgxf7hu_Tt9dLIhPW-TcwB4R6ZUmJQHiZ5pSrKtQG-vyag15V_AOEQJHyfQKpaNL3AnN65TZw7pZwOnx7kjIcCamwZFdIodZO0ltlBzARUaYpi-2Behdk7PpvH8UkOecEs9m9NlEjZ7cejJzZy10ymgxJnrp64Y='
+SESSION_STRING = "1BJWap1sBu3xkxXl8B-bm2JtFLqw_keauUJuL2BfxfJn1v6BK9KrWwaal3Grsa-Tv0n6Zxj1WND1oZp5V4EOof50uVm0wgzYJsKzuy6s2It38WKRSkR2eQiPxUPeddadiiMAl6KBQ9069f1fRa-XTvL6AJukxgNYj1epxydZbl3acI6jFlFBcCztjK2Y7Zdf5BncX9cdCeJPDb8JodIFP0DK2Dcu0R_aKRD-DHSnlpx_3iKoXssVKStG3F-OHwc2kNihH2eaRIdAQKFQgl18BhcxyF77LSEoBJJI7dZIr-obIQKkEbPYQfz_8qN4yYoYwx5PumU_mu7tIJ1MtbleH9Sr8kAap_j4="
 
 ENC_API_ID = b'gAAAAABqcinp5y377NK8ct-rOloxUyl_ZvHsworgDh-D4qZorDcoRwHe48_L9zVy8jwXTKFmw47o9uy_ejZDKH15PyRS-FBs6Q=='
 
