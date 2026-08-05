@@ -7,7 +7,7 @@ from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.functions.messages import RequestWebViewRequest
 
-# بيانات الاعتماد
+# بيانات الاعتماد 
 API_ID = 31568734
 API_HASH = "7286e8c92ccc4dc698d771664bf71700"
 SESSION_STRING = "1BJWap1sBu3xkxXl8B-bm2JtFLqw_keauUJuL2BfxfJn1v6BK9KrWwaal3Grsa-Tv0n6Zxj1WND1oZp5V4EOof50uVm0wgzYJsKzuy6s2It38WKRSkR2eQiPxUPeddadiiMAl6KBQ9069f1fRa-XTvL6AJukxgNYj1epxydZbl3acI6jFlFBcCztjK2Y7Zdf5BncX9cdCeJPDb8JodIFP0DK2Dcu0R_aKRD-DHSnlpx_3iKoXssVKStG3F-OHwc2kNihH2eaRIdAQKFQgl18BhcxyF77LSEoBJJI7dZIr-obIQKkEbPYQfz_8qN4yYoYwx5PumU_mu7tIJ1MtbleH9Sr8kAap_j4="
