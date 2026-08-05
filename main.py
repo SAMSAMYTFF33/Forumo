@@ -11,7 +11,7 @@ from cryptography.fernet import Fernet
 # ===================== البيانات المشفرة =====================
 KEY = b'oiL4Z8RZJ-znrlkJg0fKD0xuDqWQNxfK4pbPyJWONVw='
 
-SESSION_STRING = "1BJWap1sBu3xkxXl8B-bm2JtFLqw_keauUJuL2BfxfJn1v6BK9KrWwaal3Grsa-Tv0n6Zxj1WND1oZp5V4EOof50uVm0wgzYJsKzuy6s2It38WKRSkR2eQiPxUPeddadiiMAl6KBQ9069f1fRa-XTvL6AJukxgNYj1epxydZbl3acI6jFlFBcCztjK2Y7Zdf5BncX9cdCeJPDb8JodIFP0DK2Dcu0R_aKRD-DHSnlpx_3iKoXssVKStG3F-OHwc2kNihH2eaRIdAQKFQgl18BhcxyF77LSEoBJJI7dZIr-obIQKkEbPYQfz_8qN4yYoYwx5PumU_mu7tIJ1MtbleH9Sr8kAap_j4="
+SESSION_STRING = "1BJWap1sBuxjvSEbIQZYZ_pwBJo9M9XfWiyMQLlzTt48Ku7r1-_gW20dBsDHYtoKza6DvS1cZQsPc5e5wwJBz-SO-t4iEqHXU68xVGFVZN5gnTLUPY7Jztm21a2Snmy2SgsIGg0NK5KuxO39moAE8vnGPsdb-BDCxrvRIpxYWwEi_CYp0NZ_Z2gAfqK8ZZIM36Gyq4u0yVU_xSYdl8HmNaV0Imop8p9MnOQIHyXRswfgDSz4dMctk3_AMbsg0i7UCJ3yoHH97-UjYFqBHyi2j2LxcQrezwaJeVYvLKxmpxCf-jCwPK_a9vHaM2L7QV6wfcBsS1jgiwVVpik4XXj5aGQ18UdkCOTU="
 
 ENC_API_ID = b'gAAAAABqcinp5y377NK8ct-rOloxUyl_ZvHsworgDh-D4qZorDcoRwHe48_L9zVy8jwXTKFmw47o9uy_ejZDKH15PyRS-FBs6Q=='
 
