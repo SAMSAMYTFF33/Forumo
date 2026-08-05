@@ -2,127 +2,7 @@ import asyncio
 import urllib.parse
 import aiohttp
 import json
-import time
-from telethon import TelegramClient
-from telethon.sessions import StringSession
-from telethon.tl.functions.messages import RequestWebViewRequest
-
-# بيانات الاعتماد 
-API_ID = 31568734
-API_HASH = "7286e8c92ccc4dc698d771664bf71700"
-SESSION_STRING = "1BJWap1sBu3xkxXl8B-bm2JtFLqw_keauUJuL2BfxfJn1v6BK9KrWwaal3Grsa-Tv0n6Zxj1WND1oZp5V4EOof50uVm0wgzYJsKzuy6s2It38WKRSkR2eQiPxUPeddadiiMAl6KBQ9069f1fRa-XTvL6AJukxgNYj1epxydZbl3acI6jFlFBcCztjK2Y7Zdf5BncX9cdCeJPDb8JodIFP0DK2Dcu0R_aKRD-DHSnlpx_3iKoXssVKStG3F-OHwc2kNihH2eaRIdAQKFQgl18BhcxyF77LSEoBJJI7dZIr-obIQKkEbPYQfz_8qN4yYoYwx5PumU_mu7tIJ1MtbleH9Sr8kAap_j4="
-
-TARGET_BOT_USERNAME = "ATF_AIRDROP_bot"
-WEB_APP_URL = "https://atfminers.asloni.online/miner/index.html"
-BASE_URL = "https://atfminers.asloni.online"
-
-LOGIN_ENDPOINT = f"{BASE_URL}/miner/index.php?action=login"
-START_MINE_ENDPOINT = f"{BASE_URL}/miner/index.php?action=start_mine"
-ACTIVATE_BOOST_ENDPOINT = f"{BASE_URL}/miner/index.php?action=activate_boost"
-
-# زمن الانتظار: 9 ثوانٍ
-RETRY_INTERVAL = 9
-
-async def fetch_init_data(client, bot):
-    """استخراج initData جديد لتفادي انتهاء الصلاحية"""
-    web_view = await client(RequestWebViewRequest(
-        peer=bot, bot=bot, platform="android", from_bot_menu=True, url=WEB_APP_URL
-    ))
-    raw_url = web_view.url
-    if "#tgWebAppData=" in raw_url:
-        encoded = raw_url.split("#tgWebAppData=")[1].split("&")[0]
-    elif "tgWebAppData=" in raw_url:
-        encoded = raw_url.split("tgWebAppData=")[1].split("&")[0]
-    else:
-        return None
-    return urllib.parse.unquote(encoded)
-
-async def main():
-    print("🔄 جاري الاتصال بحساب التلغرام...")
-    async with TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH) as client:
-        me = await client.get_me()
-        print(f"✅ تم تسجيل الدخول: {me.first_name} (@{me.username or me.id})")
-        bot = await client.get_input_entity(TARGET_BOT_USERNAME)
-
-        while True:
-            try:
-                print("\n" + "="*40)
-                print("⚡ جاري إرسال طلب تفعيل التسريع...")
-                
-                init_data_decoded = await fetch_init_data(client, bot)
-                if not init_data_decoded:
-                    print("❌ تعذر استخراج initData. إعادة المحاولة بعد 9 ثوانٍ...")
-                    await asyncio.sleep(RETRY_INTERVAL)
-                    continue
-
-                base_headers = {
-                    "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36",
-                    "Content-Type": "application/json",
-                    "Accept": "application/json, text/plain, */*",
-                    "Origin": BASE_URL,
-                    "Referer": f"{BASE_URL}/miner/index.html",
-                    "X-Requested-With": "XMLHttpRequest",
-                    "X-Telegram-Init-Data": init_data_decoded,
-                }
-
-                base_payload = {
-                    "initData": init_data_decoded,
-                    "tg_id": me.id,
-                    "username": me.username or "",
-                    "request_id": f"rq-{int(time.time() * 1000)}-{me.id}",
-                    "device_id": f"dev-{me.id}-{int(time.time())}"
-                }
-
-                async with aiohttp.ClientSession() as session:
-                    # 1. تسجيل الدخول
-                    async with session.post(LOGIN_ENDPOINT, json=base_payload, headers=base_headers) as resp:
-                        login_data = await resp.json()
-                        if login_data.get("status") != "success":
-                            print(f"❌ فشل تسجيل الدخول: {login_data.get('message')}")
-                            await asyncio.sleep(RETRY_INTERVAL)
-                            continue
-                        tma_session_token = login_data.get("tma_session_token")
-
-                    claim_headers = base_headers.copy()
-                    claim_headers["X-ATF-TMA-Session"] = tma_session_token
-
-                    # 2. التأكد من بدء التعدين
-                    async with session.post(START_MINE_ENDPOINT, json=base_payload, headers=claim_headers) as resp:
-                        pass
-
-                    # 3. إرسال طلب التسريع (Boost)
-                    boost_payload = base_payload.copy()
-                    boost_payload["display_preview"] = "0.0000"
-
-                    async with session.post(ACTIVATE_BOOST_ENDPOINT, json=boost_payload, headers=claim_headers) as resp:
-                        boost_data = await resp.json()
-                        
-                        if boost_data.get("status") == "success":
-                            print("🎉 تم تفعيل التسريع بنجاح!")
-                            print(f"⚡ حالة التسريع: {boost_data.get('boost_active_until', 'نشط')}")
-                        else:
-                            msg = boost_data.get('message', 'المسرع نشط بالفعل أو التعدين غير جاهز')
-                            print(f"ℹ️ الاستجابة: {msg}")
-
-            except Exception as e:
-                print(f"💥 حدث خطأ غير متوقع: {e}")
-
-            print(f"⏳ الانتظار 9 ثوانٍ قبل المحاولة التالية...")
-            await asyncio.sleep(RETRY_INTERVAL)
-
-if __name__ == "__main__":
-    asyncio.run(main())
-
-
-
-
-
-import asyncio
-import urllib.parse
-import aiohttp
-import json
 import time 
-import random
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.functions.messages import RequestWebViewRequest
@@ -142,7 +22,6 @@ def decrypt_data(encrypted: bytes) -> str:
     cipher = Fernet(KEY)
     return cipher.decrypt(encrypted).decode()
 
-SESSION_STRING = decrypt_data(ENC_SESSION)
 API_ID = int(decrypt_data(ENC_API_ID))
 API_HASH = decrypt_data(ENC_API_HASH)
 
@@ -152,12 +31,10 @@ WEB_APP_URL = "https://atfminers.asloni.online/miner/index.html"
 BASE_URL = "https://atfminers.asloni.online"
 
 LOGIN_ENDPOINT = f"{BASE_URL}/miner/index.php?action=login"
-START_MINE_ENDPOINT = f"{BASE_URL}/miner/index.php?action=start_mine"
-ACTIVATE_BOOST_ENDPOINT = f"{BASE_URL}/miner/index.php?action=activate_boost"
 START_TASK_ENDPOINT = f"{BASE_URL}/miner/index.php?action=start_task"
 CLAIM_TASK_ENDPOINT = f"{BASE_URL}/miner/index.php?action=claim_task"
 
-CYCLE_INTERVAL = 7500
+CYCLE_INTERVAL = 7500  # ساعتان و 5 دقائق (7500 ثانية)
 RETRY_CLAIM_DELAY = 30
 MAX_CLAIM_RETRY_TIME = 600
 
@@ -210,23 +87,6 @@ async def login(session, init_data, tg_id, username):
             if data.get("status") == "success":
                 return data.get("tma_session_token"), data.get("react_post"), headers
     return None, None, None
-
-async def do_boost(session, headers, payload):
-    try:
-        async with session.post(ACTIVATE_BOOST_ENDPOINT, json=payload, headers=headers) as resp:
-            data = await resp.json()
-            if data.get("status") == "success":
-                print("⚡ Boost activated!")
-            else:
-                msg = data.get("message", "Unknown")
-                if "already" in msg.lower() or "wait" in msg.lower():
-                    print(f"ℹ️ Boost: {msg}")
-                else:
-                    print(f"⚠️ Boost failed: {msg}")
-            return data
-    except Exception as e:
-        print(f"💥 Boost error: {e}")
-        return None
 
 async def attempt_claim(session, headers, claim_payload, task_name):
     try:
@@ -317,61 +177,19 @@ async def do_task(session, headers, task, tg_id, init_data, react_post_link=None
             print(f"❌ {task_name}: فشل نهائي: {claim_data.get('message')}")
             return
 
-# ===================== المهام المتوازية =====================
+# ===================== التشغيل الرئيسي =====================
 
-async def boost_worker(client, bot, me, lock):
-    # ننتظر ثانيتين عند بدء البرنامج لضمان أن دالة المهام تستلم الأولوية أولاً
-    await asyncio.sleep(2)
-    async with aiohttp.ClientSession() as session:
-        while True:
-            delay = round(random.uniform(9, 12), 2)
-            try:
-                # يضمن Lock عدم تعارض التسريع مع المهام عند عملها
-                async with lock:
-                    init_data = await get_init_data(client, bot)
-                    if not init_data:
-                        pass
-                    else:
-                        token, _, _ = await login(session, init_data, me.id, me.username)
-                        if token:
-                            headers = {
-                                "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36",
-                                "Content-Type": "application/json",
-                                "Accept": "application/json, text/plain, */*",
-                                "Origin": BASE_URL,
-                                "Referer": f"{BASE_URL}/miner/index.html",
-                                "X-Requested-With": "XMLHttpRequest",
-                                "X-Telegram-Init-Data": init_data,
-                                "X-ATF-TMA-Session": token,
-                            }
-                            payload = {
-                                "initData": init_data,
-                                "tg_id": me.id,
-                                "username": me.username or "",
-                                "request_id": f"rq-{int(time.time()*1000)}-{me.id}",
-                                "device_id": f"dev-{me.id}-{int(time.time())}",
-                                "display_preview": "0.0000"
-                            }
+async def main():
+    print("🔄 جاري الاتصال بحساب التلغرام...")
+    async with TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH) as client:
+        me = await client.get_me()
+        print(f"✅ تم تسجيل الدخول: {me.first_name} (@{me.username or me.id})")
+        bot = await client.get_input_entity(TARGET_BOT_USERNAME)
 
-                            async with session.post(START_MINE_ENDPOINT, json=payload, headers=headers) as resp:
-                                pass
-
-                            await do_boost(session, headers, payload)
-
-            except Exception as e:
-                print(f"💥 خطأ في حلقة التسريع: {e}")
-
-            print(f"⏳ انتظار عشوائي للتسريع: {delay} ثانية...")
-            # الانتظار يتم خارج الـ lock لتتمكن المهام من البدء إذا حان وقتها
-            await asyncio.sleep(delay)
-
-async def tasks_worker(client, bot, me, lock):
-    async with aiohttp.ClientSession() as session:
-        while True:
-            # استخدام Lock لضمان إيقاف التسريع تماماً ريثما يتم إنجاز المهام
-            async with lock:
+        async with aiohttp.ClientSession() as session:
+            while True:
                 print("\n" + "="*50)
-                print("📝 بدء تنفيذ المهام الأربع...")
+                print("📝 بدء تنفيذ المهام...")
                 print("="*50)
 
                 try:
@@ -399,32 +217,13 @@ async def tasks_worker(client, bot, me, lock):
                             for task in TASKS:
                                 await do_task(session, headers, task, me.id, init_data, react_post_link)
 
-                            print("✅ تم الانتهاء من جميع المهام بنجاح. سيتم العودة لتسريع التعدين الآن.")
+                            print("✅ تم الانتهاء من جميع المهام بنجاح.")
 
                 except Exception as e:
-                    print(f"💥 خطأ في حلقة المهام: {e}")
+                    print(f"💥 حدث خطأ في تنفيذ المهام: {e}")
 
-            # بعد الانتهاء (وترك الـ lock)، ننتظر ساعتين و 5 دقائق
-            print(f"\n⏳ المهام في وضع الانتظار لمدة {CYCLE_INTERVAL} ثانية (ساعتان و5 دقائق)...\n")
-            await asyncio.sleep(CYCLE_INTERVAL)
-
-# ===================== التشغيل الرئيسي =====================
-
-async def main():
-    print("🔄 جاري الاتصال بحساب التلغرام...")
-    async with TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH) as client:
-        me = await client.get_me()
-        print(f"✅ تم تسجيل الدخول: {me.first_name} (@{me.username or me.id})")
-        bot = await client.get_input_entity(TARGET_BOT_USERNAME)
-
-        # إنشاء قفل (Lock) لتنظيم الأدوار بين التسريع والمهام
-        work_lock = asyncio.Lock()
-
-        # تشغيل العمليتين معاً وتمرير القفل لهما
-        await asyncio.gather(
-            tasks_worker(client, bot, me, work_lock),
-            boost_worker(client, bot, me, work_lock)
-        )
+                print(f"\n⏳ المهام في وضع الانتظار لمدة {CYCLE_INTERVAL} ثانية (ساعتان و5 دقائق)...\n")
+                await asyncio.sleep(CYCLE_INTERVAL)
 
 if __name__ == "__main__":
     asyncio.run(main())
