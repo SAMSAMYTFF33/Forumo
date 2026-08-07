@@ -365,11 +365,11 @@ async def monsterland_worker(client: TelegramClient, session: aiohttp.ClientSess
                         await execute_instant_ad_monster(session, current_token, item_id, label)
 
                 if idx < len(ITEMS_LIST_MONSTER) - 1:
-                    delay = random.randint(8, 35)
+                    delay = random.randint(3200, 3600)
                     print(f"⏳ [Monster] انتظار عشوائي {delay} ثانية قبل الإعلان التالي...")
                     await asyncio.sleep(delay)
 
-            cycle_delay = random.randint(8, 35)
+            cycle_delay = random.randint(3200, 3600)
             print(f"\n⏳ [Monster] اكتملت الدورة #{cycle_count}. انتظار عشوائي {cycle_delay} ثانية قبل الدورة التالية...")
             cycle_count += 1
             await asyncio.sleep(cycle_delay)
@@ -453,3 +453,4 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"⚠️ خطأ عام، إعادة التشغيل الفوري بعد 10 ثوانٍ: {e}")
             time.sleep(10)
+            
