@@ -284,7 +284,7 @@ async def execute_instant_ad_monster(session: aiohttp.ClientSession, token: str,
 
         print(f"⚡ [Monster] تم إنشاء ({label}) -> ID: {tx_id}")
 
-        await asyncio.sleep(2)
+        await asyncio.sleep(8)
 
         async with session.get(f"{API_TASK_RESULT}?txId={tx_id}", headers=headers, timeout=15) as res_check:
             pass 
