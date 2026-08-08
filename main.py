@@ -173,7 +173,6 @@ def format_monster_info(monster: dict, profile_data: dict, acc: dict) -> str:
         f"💰 **عدد Lumis:** `{lumis}`\n"
     )
 
-    # عرض الوقت المتبقي إذا كانت الأتمتة مجدولة
     if acc and acc.get("scheduled_time", 0) > 0:
         remaining = int(acc["scheduled_time"] - time.time())
         if remaining > 0:
@@ -185,7 +184,7 @@ def format_monster_info(monster: dict, profile_data: dict, acc: dict) -> str:
     return text
 
 async def verify_account_and_get_monster(api_id_raw, api_hash_raw, session_raw, cached_token=None):
-    """دالة محسنة تستخدم التوكن المحفوظ أولاً للسرعة القصوى، وتجدده إذا لزم الأمر مع معالجة الأخطاء"""
+    """دالة تستخدم التوكن المحفوظ وتستخرج جديداً عند الحاجة"""
     try:
         api_id = int(str(api_id_raw).strip())
     except (ValueError, TypeError):
@@ -194,7 +193,6 @@ async def verify_account_and_get_monster(api_id_raw, api_hash_raw, session_raw, 
     api_hash = str(api_hash_raw).strip()
     session_str = str(session_raw).strip()
 
-    # محاولة استخدام التوكن المحفوظ أولاً (فائقة السرعة)
     if cached_token:
         headers = build_headers(cached_token)
         try:
@@ -207,9 +205,8 @@ async def verify_account_and_get_monster(api_id_raw, api_hash_raw, session_raw, 
                         if monsters:
                             return True, monsters[0], profile, cached_token, None
         except Exception:
-            pass # في حال الفشل ننتقل لاستخراج توكن جديد عبر تيليجرام
+            pass
 
-    # إذا لم يوجد توكن أو انتهت صلاحيته (نفتح اتصال تيليجرام للحصول على جديد)
     try:
         async with TelegramClient(StringSession(session_str), api_id, api_hash, connection_retries=3) as client:
             bot = await client.get_input_entity(TARGET_BOT_USERNAME_MONSTER)
@@ -264,7 +261,7 @@ async def execute_with_ads(session: aiohttp.ClientSession, token: str, monster_i
         return None
 
 async def global_background_worker():
-    """خيط خلفي سريع محمّي ضد الانقطاع المباشر للشبكة"""
+    """خيط خلفي سريع محمّي ضد انقطاعات الشبكة"""
     while True:
         try:
             for user_id, udata in list(users_db.items()):
@@ -273,19 +270,17 @@ async def global_background_worker():
                         acc["scheduled_time"] = 0
                         continue
 
-                    # فحص سريع للوحش باستخدام التوكن المحفوظ
                     success, monster, profile, token, err = await verify_account_and_get_monster(
                         acc["api_id"], acc["api_hash"], acc["session"], acc.get("token")
                     )
 
                     if success and monster:
-                        acc["token"] = token # تحديث التوكن إن تغير
+                        acc["token"] = token
                         monster_id = monster.get("_id")
                         vitals = monster.get("vitals", {})
                         threshold = acc["threshold"]
                         current_time = time.time()
 
-                        # البحث عن أول عنصر أقل من النسبة المطلوبة
                         vital_to_fix = None
                         item_to_buy = None
                         for v_type, item_id in VITAL_ITEMS.items():
@@ -295,30 +290,25 @@ async def global_background_worker():
                                 break
 
                         if vital_to_fix:
-                            # إذا لم تكن مجدولة من قبل، قم بجدولتها بالمهلة العشوائية
                             if acc.get("scheduled_time", 0) == 0:
                                 min_d, max_d = acc.get("delay_range", (8, 16))
                                 acc["scheduled_time"] = current_time + random.randint(min_d, max_d)
                                 acc["scheduled_vital"] = vital_to_fix
-                            
-                            # إذا حان وقت التنفيذ المجدول
                             elif current_time >= acc["scheduled_time"]:
                                 async with aiohttp.ClientSession() as http_session:
                                     if acc["no_ads_status"]:
                                         await execute_without_ads(http_session, acc["token"], monster_id, item_to_buy)
                                     elif acc["ads_status"]:
                                         await execute_with_ads(http_session, acc["token"], monster_id, item_to_buy)
-                                # تصفير الجدولة لكي يفحص النسب مجدداً الدورة القادمة
                                 acc["scheduled_time"] = 0
                                 acc["scheduled_vital"] = None
                         else:
-                            # كل شيء فوق النسبة، قم بإلغاء أي جدولة
                             acc["scheduled_time"] = 0
                             acc["scheduled_vital"] = None
 
-            await asyncio.sleep(10) # فحص كل 10 ثواني
+            await asyncio.sleep(10)
         except Exception as e:
-            logger.error(f"خطأ غير متوقع في الخيط الخلفي تم تجاوزه بنجاح: {e}")
+            logger.error(f"خطأ غير متوقع في الخيط الخلفي: {e}")
             await asyncio.sleep(10)
 
 # ===================== المعالجة والواجهة =====================
@@ -356,7 +346,7 @@ async def process_credentials(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("⚠️ البيانات غير مكتملة. يرجى إرسالها كاملاً.")
         return WAITING_CREDENTIALS
 
-    status_msg = await update.message.reply_text("⏳ جاري التحقق من الحساب واستخراج البيانات (يتم مرة واحدة فقط)...")
+    status_msg = await update.message.reply_text("⏳ جاري التحقق من الحساب واستخراج البيانات...")
 
     success, monster, profile, token, err_msg = await verify_account_and_get_monster(parsed_id, parsed_hash, parsed_session)
 
@@ -366,7 +356,7 @@ async def process_credentials(update: Update, context: ContextTypes.DEFAULT_TYPE
             "api_id": parsed_id,
             "api_hash": parsed_hash,
             "session": parsed_session,
-            "token": token,  # حفظ التوكن للسرعة
+            "token": token,
             "monster_name": monster.get("name", "وحش بدون اسم"),
             "monster_id": monster.get("_id"),
             "ads_status": False,
@@ -399,7 +389,6 @@ async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     udata = get_user_db(user_id)
     acc = get_active_account(user_id)
 
-    # -------------------- التنفيذ المباشر (فوري بالتوكن) --------------------
     if data == "direct_execute":
         if not acc:
             await query.edit_message_text("❌ لا يوجد حساب نشط.", reply_markup=build_main_keyboard(user_id))
@@ -444,7 +433,6 @@ async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             await query.edit_message_text(f"❌ خطأ: {str(e)}", reply_markup=build_main_keyboard(user_id))
         return
 
-    # -------------------- أزرار الإعدادات --------------------
     if data == "open_settings":
         if not acc: return
         min_d, max_d = acc.get("delay_range", (8, 16))
@@ -486,7 +474,6 @@ async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.edit_message_text("تم إلغاء العملية. القائمة الرئيسية:", reply_markup=build_main_keyboard(user_id))
         return ConversationHandler.END
 
-    # -------------------- باقي القوائم --------------------
     if data == "open_accounts_menu":
         await query.edit_message_text(
             "🔄 **إدارة الحسابات المضافة**", reply_markup=build_accounts_keyboard(user_id), parse_mode="Markdown"
@@ -532,7 +519,6 @@ async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             if acc["no_ads_status"]: acc["ads_status"] = False
             await query.edit_message_reply_markup(reply_markup=build_main_keyboard(user_id))
 
-# -------------------- دوال الإدخال النصي للإعدادات --------------------
 async def process_threshold(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text.strip()
@@ -583,14 +569,12 @@ async def on_startup(app):
     asyncio.create_task(global_background_worker())
 
 async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """معالج الأخطاء العام لامتصاص انقطاعات شبكة تيليجرام وتجنب انهيار التطبيق"""
     if isinstance(context.error, (NetworkError, TimedOut)):
         logger.warning("تم اكتشاف ضعف/انقطاع وقتي في شبكة الاتصال، جاري إعادة المحاولة تلقائياً...")
     else:
         logger.error(f"حدث خطأ غريب غير معالج: {context.error}")
 
 def main():
-    # تكوين طلبات HTTP بمهلة زمنية مرنة لاستيعاب ضعف شبكة Pydroid
     custom_request = HTTPXRequest(
         connect_timeout=30.0,
         read_timeout=30.0,
@@ -627,7 +611,7 @@ def main():
             CallbackQueryHandler(button_click_handler)
         ],
         allow_reentry=True,
-        per_message=False  # منع تحذير PTBUserWarning
+        per_message=False
     )
 
     app.add_handler(conv_handler)
@@ -635,7 +619,6 @@ def main():
 
     print("🚀 البوت يعمل الآن بنظام الحماية ضد انقطاع الشبكة...")
 
-    # تشغيل البوت مع وضع إعادة المحاولة المفتوحة للاتصال (bootstrap_retries=-1)
     app.run_polling(
         bootstrap_retries=-1,
         read_timeout=30,
