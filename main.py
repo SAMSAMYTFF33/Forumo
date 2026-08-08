@@ -18,6 +18,8 @@ from telegram.ext import (
     ConversationHandler,
     filters,
 )
+from telegram.request import HTTPXRequest
+from telegram.error import NetworkError, TimedOut
 
 # تقليل السجلات المزعجة
 logging.basicConfig(level=logging.ERROR)
@@ -183,7 +185,7 @@ def format_monster_info(monster: dict, profile_data: dict, acc: dict) -> str:
     return text
 
 async def verify_account_and_get_monster(api_id_raw, api_hash_raw, session_raw, cached_token=None):
-    """دالة محسنة تستخدم التوكن المحفوظ أولاً للسرعة القصوى، وتجدده إذا لزم الأمر"""
+    """دالة محسنة تستخدم التوكن المحفوظ أولاً للسرعة القصوى، وتجدده إذا لزم الأمر مع معالجة الأخطاء"""
     try:
         api_id = int(str(api_id_raw).strip())
     except (ValueError, TypeError):
@@ -195,18 +197,21 @@ async def verify_account_and_get_monster(api_id_raw, api_hash_raw, session_raw, 
     # محاولة استخدام التوكن المحفوظ أولاً (فائقة السرعة)
     if cached_token:
         headers = build_headers(cached_token)
-        async with aiohttp.ClientSession() as http_session:
-            async with http_session.get(API_USER, headers=headers, timeout=10) as r:
-                if r.status == 200:
-                    data = await r.json()
-                    monsters = data.get("monsters", [])
-                    profile = data.get("profile", {})
-                    if monsters:
-                        return True, monsters[0], profile, cached_token, None
+        try:
+            async with aiohttp.ClientSession() as http_session:
+                async with http_session.get(API_USER, headers=headers, timeout=aiohttp.ClientTimeout(total=15)) as r:
+                    if r.status == 200:
+                        data = await r.json()
+                        monsters = data.get("monsters", [])
+                        profile = data.get("profile", {})
+                        if monsters:
+                            return True, monsters[0], profile, cached_token, None
+        except Exception:
+            pass # في حال الفشل ننتقل لاستخراج توكن جديد عبر تيليجرام
 
     # إذا لم يوجد توكن أو انتهت صلاحيته (نفتح اتصال تيليجرام للحصول على جديد)
     try:
-        async with TelegramClient(StringSession(session_str), api_id, api_hash) as client:
+        async with TelegramClient(StringSession(session_str), api_id, api_hash, connection_retries=3) as client:
             bot = await client.get_input_entity(TARGET_BOT_USERNAME_MONSTER)
             web_view = await client(RequestWebViewRequest(
                 peer=bot, bot=bot, platform="android", from_bot_menu=False, url=WEB_APP_URL_MONSTER
@@ -216,7 +221,7 @@ async def verify_account_and_get_monster(api_id_raw, api_hash_raw, session_raw, 
 
             headers = build_headers(new_token)
             async with aiohttp.ClientSession() as http_session:
-                async with http_session.get(API_USER, headers=headers, timeout=10) as r:
+                async with http_session.get(API_USER, headers=headers, timeout=aiohttp.ClientTimeout(total=15)) as r:
                     if r.status != 200:
                         return False, None, None, None, f"خطأ في سيرفر اللعبة (كود: {r.status})"
                     data = await r.json()
@@ -234,7 +239,7 @@ async def execute_without_ads(session: aiohttp.ClientSession, token: str, monste
     headers = build_headers(token)
     payload = {"monsterId": monster_id, "itemId": item_id, "action": "purchase"}
     try:
-        async with session.post(API_VITALS_DIRECT, headers=headers, json=payload, timeout=15) as r:
+        async with session.post(API_VITALS_DIRECT, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=15)) as r:
             return r.status
     except Exception:
         return None
@@ -243,23 +248,23 @@ async def execute_with_ads(session: aiohttp.ClientSession, token: str, monster_i
     headers = build_headers(token)
     payload = {"action": "vitals", "metadata": {"monsterId": monster_id, "itemId": item_id}}
     try:
-        async with session.post(API_CREATE_AD, headers=headers, json=payload, timeout=15) as res_create:
+        async with session.post(API_CREATE_AD, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=15)) as res_create:
             if res_create.status != 200:
                 return res_create.status
             tx_id = (await res_create.json()).get("adTxId")
         if not tx_id:
             return None
         await asyncio.sleep(random.randint(8, 12))
-        async with session.get(f"{API_TASK_RESULT}?txId={tx_id}", headers=headers, timeout=15):
+        async with session.get(f"{API_TASK_RESULT}?txId={tx_id}", headers=headers, timeout=aiohttp.ClientTimeout(total=15)):
             pass
         payload_complete = {"adTxId": tx_id, "provider": "gigapub"}
-        async with session.post(API_COMPLETE_AD, headers=headers, json=payload_complete, timeout=15) as res_comp:
+        async with session.post(API_COMPLETE_AD, headers=headers, json=payload_complete, timeout=aiohttp.ClientTimeout(total=15)) as res_comp:
             return res_comp.status
     except Exception:
         return None
 
 async def global_background_worker():
-    """خيط خلفي سريع يعتمد على التوكن المحفوظ لجدولة وتنفيذ الطلبات بدقة"""
+    """خيط خلفي سريع محمّي ضد الانقطاع المباشر للشبكة"""
     while True:
         try:
             for user_id, udata in list(users_db.items()):
@@ -311,8 +316,9 @@ async def global_background_worker():
                             acc["scheduled_time"] = 0
                             acc["scheduled_vital"] = None
 
-            await asyncio.sleep(10) # فحص كل 10 ثواني (سريع جداً لأنه لا يستخدم تيليجرام)
-        except Exception:
+            await asyncio.sleep(10) # فحص كل 10 ثواني
+        except Exception as e:
+            logger.error(f"خطأ غير متوقع في الخيط الخلفي تم تجاوزه بنجاح: {e}")
             await asyncio.sleep(10)
 
 # ===================== المعالجة والواجهة =====================
@@ -393,7 +399,7 @@ async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     udata = get_user_db(user_id)
     acc = get_active_account(user_id)
 
-    # -------------------- التنفيذ المباشر (أصبح فورياً بالتوكن) --------------------
+    # -------------------- التنفيذ المباشر (فوري بالتوكن) --------------------
     if data == "direct_execute":
         if not acc:
             await query.edit_message_text("❌ لا يوجد حساب نشط.", reply_markup=build_main_keyboard(user_id))
@@ -420,7 +426,6 @@ async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.edit_message_text(f"⚡ جاري تنفيذ شراء **{item_name}** فورياً...", parse_mode="Markdown")
 
         try:
-            # نستخدم التوكن المحفوظ مباشرة بدون الدخول لتيليجرام!
             async with aiohttp.ClientSession() as http_session:
                 status = await execute_without_ads(http_session, acc["token"], acc["monster_id"], item_id)
 
@@ -439,7 +444,7 @@ async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             await query.edit_message_text(f"❌ خطأ: {str(e)}", reply_markup=build_main_keyboard(user_id))
         return
 
-    # -------------------- أزرار الإعدادات (نسبة + مهلة) --------------------
+    # -------------------- أزرار الإعدادات --------------------
     if data == "open_settings":
         if not acc: return
         min_d, max_d = acc.get("delay_range", (8, 16))
@@ -577,8 +582,29 @@ async def process_delay(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def on_startup(app):
     asyncio.create_task(global_background_worker())
 
+async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """معالج الأخطاء العام لامتصاص انقطاعات شبكة تيليجرام وتجنب انهيار التطبيق"""
+    if isinstance(context.error, (NetworkError, TimedOut)):
+        logger.warning("تم اكتشاف ضعف/انقطاع وقتي في شبكة الاتصال، جاري إعادة المحاولة تلقائياً...")
+    else:
+        logger.error(f"حدث خطأ غريب غير معالج: {context.error}")
+
 def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).post_init(on_startup).build()
+    # تكوين طلبات HTTP بمهلة زمنية مرنة لاستيعاب ضعف شبكة Pydroid
+    custom_request = HTTPXRequest(
+        connect_timeout=30.0,
+        read_timeout=30.0,
+        write_timeout=30.0,
+        pool_timeout=30.0
+    )
+
+    app = (
+        ApplicationBuilder()
+        .token(BOT_TOKEN)
+        .request(custom_request)
+        .post_init(on_startup)
+        .build()
+    )
 
     conv_handler = ConversationHandler(
         entry_points=[
@@ -600,12 +626,23 @@ def main():
             CommandHandler("start", start_command),
             CallbackQueryHandler(button_click_handler)
         ],
-        allow_reentry=True
+        allow_reentry=True,
+        per_message=False  # منع تحذير PTBUserWarning
     )
 
     app.add_handler(conv_handler)
-    print("🚀 البوت السريع يعمل بنجاح...")
-    app.run_polling()
+    app.add_error_handler(global_error_handler)
+
+    print("🚀 البوت يعمل الآن بنظام الحماية ضد انقطاع الشبكة...")
+
+    # تشغيل البوت مع وضع إعادة المحاولة المفتوحة للاتصال (bootstrap_retries=-1)
+    app.run_polling(
+        bootstrap_retries=-1,
+        read_timeout=30,
+        write_timeout=30,
+        connect_timeout=30,
+        pool_timeout=30,
+    )
 
 if __name__ == "__main__":
     main()
