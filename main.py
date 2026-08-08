@@ -9,11 +9,9 @@ from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.functions.messages import RequestWebViewRequest
 
-# ===================== إعدادات الجلسات (Sessions منفصلة تماماً) =====================
-# 1. جلسة خاصة بـ ATF
+# ===================== إعدادات الجلسات (Sessions منفصلة تماماً - لم تُغيّر) =====================
 SESSION_STRING_ATF = "1BJWap1sBuxjvSEbIQZYZ_pwBJo9M9XfWiyMQLlzTt48Ku7r1-_gW20dBsDHYtoKza6DvS1cZQsPc5e5wwJBz-SO-t4iEqHXU68xVGFVZN5gnTLUPY7Jztm21a2Snmy2SgsIGg0NK5KuxO39moAE8vnGPsdb-BDCxrvRIpxYWwEi_CYp0NZ_Z2gAfqK8ZZIM36Gyq4u0yVU_xSYdl8HmNaV0Imop8p9MnOQIHyXRswfgDSz4dMctk3_AMbsg0i7UCJ3yoHH97-UjYFqBHyi2j2LxcQrezwaJeVYvLKxmpxCf-jCwPK_a9vHaM2L7QV6wfcBsS1jgiwVVpik4XXj5aGQ18UdkCOTU="
 
-# 2. جلسة خاصة بـ Monsterland (ضع سيشن حسابك هنا)
 SESSION_STRING_MONSTER = "1BJWap1wBu4nVoNbxlJjeimChDuFtJFf-DIOl0cQE-sdurr6DuG3MLi23QOlaAmdHcU4k6lvqYt0Cn9Edehg8jApjS7Hhus2LNpBPotjpyNNWSWISgWMmBA-_GV0aPcXCcL8NTNjwAvaQCPptkQ02560D2UM5iunpN7kEIkwWNa-mMRFfMmwldrK81tc7CQf2QqkGLBijcNJsw-1-7h-UZ1A1Y75gk3BaLXrM-upajdg89y9Ka-vVsiUw4CZL8gMWU2CcxkPSjoxWBA-7bzG-HPnWduIyY6G__IDUsVua9ZTCFYywMkNccpNfwdXLAPEAjtFQ-bawSyWEM9uzM2pVlfE1Nxg2Nww="
 
 # ===================== البيانات المشفرة (ATF) =====================
@@ -28,8 +26,7 @@ def decrypt_data(encrypted: bytes) -> str:
 API_ID = int(decrypt_data(ENC_API_ID))
 API_HASH = decrypt_data(ENC_API_HASH)
 
-
-# ===================== إعدادات ATF =====================
+# ===================== إعدادات ATF (بدون تغيير) =====================
 TARGET_BOT_USERNAME_ATF = "ATF_AIRDROP_bot"
 WEB_APP_URL_ATF = "https://atfminers.asloni.online/miner/index.html"
 BASE_URL_ATF = "https://atfminers.asloni.online"
@@ -40,7 +37,7 @@ ACTIVATE_BOOST_ENDPOINT = f"{BASE_URL_ATF}/miner/index.php?action=activate_boost
 START_TASK_ENDPOINT = f"{BASE_URL_ATF}/miner/index.php?action=start_task"
 CLAIM_TASK_ENDPOINT = f"{BASE_URL_ATF}/miner/index.php?action=claim_task"
 
-CYCLE_INTERVAL_ATF = 7500  # ساعتان و 5 دقائق
+CYCLE_INTERVAL_ATF = 7500
 RETRY_CLAIM_DELAY_ATF = 30
 MAX_CLAIM_RETRY_TIME_ATF = 600
 
@@ -51,26 +48,27 @@ TASKS_ATF = [
     {"id": "telegram_react_latest", "min_seconds": 20, "name": "React to latest post"}
 ]
 
-
 # ===================== إعدادات Monsterland =====================
 TARGET_BOT_USERNAME_MONSTER = "monsterland_bot"
 WEB_APP_URL_MONSTER = "https://lets.playmonsterland.com"
 
+API_USER = "https://lets.playmonsterland.com/api/user?include=monsters"
 API_CREATE_AD = "https://lets.playmonsterland.com/api/ads/create-task"
 API_TASK_RESULT = "https://lets.playmonsterland.com/api/ads/task-result"
 API_COMPLETE_AD = "https://lets.playmonsterland.com/api/ads/complete"
 
-MONSTER_ID = "6a734e0d9289c0b99d65707a"
+THRESHOLD = 55  # الحد الأدنى المقبول للنسبة
 
-ITEMS_LIST_MONSTER = [
-    ("magic_apple", "Magic Apple"),
-    ("wizard_coffee", "Wizard Coffee"),
-    ("magic_towel", "Magic Towel"),
-]
+# ربط كل نسبة (vital) بالعنصر المناسب لمشاهدة إعلانها
+VITAL_TO_ITEM = {
+    "food": ("magic_apple", "Feed (magic_apple)"),
+    "hygiene": ("magic_towel", "Wash (magic_towel)"),
+    "energy": ("wizard_coffee", "Wizard Coffee"),
+}
 
 
 # ====================================================================
-#                          دوال ATF الأساسية
+#                          دوال ATF الأساسية (بدون تغيير)
 # ====================================================================
 
 async def get_init_data_atf(client, bot):
@@ -215,7 +213,7 @@ async def do_task_atf(session, headers, task, tg_id, init_data, react_post_link=
 
 
 # ====================================================================
-#                          دوال Monsterland الأساسية
+#                          دوال Monsterland
 # ====================================================================
 
 def build_headers_monster(token: str) -> dict:
@@ -259,22 +257,56 @@ async def fetch_fresh_token_monster(client: TelegramClient) -> str:
         print(f"⚠️ [Monster] فشل توليد توكن جديد: {e}")
         return None
 
-async def execute_instant_ad_monster(session: aiohttp.ClientSession, token: str, item_id: str, label: str):
+
+async def get_monster_info(session: aiohttp.ClientSession, token: str):
+    """يرجع (monster_id, vitals_dict, status_code)."""
+    headers = build_headers_monster(token)
+    try:
+        async with session.get(API_USER, headers=headers, timeout=15) as r:
+            if r.status == 401:
+                return None, None, 401
+            text = await r.text()
+            if r.status != 200:
+                print(f"❌ [Monster] فشل جلب بيانات المستخدم: {r.status} - {text}")
+                return None, None, r.status
+
+            data = json.loads(text)
+            monsters = data.get("monsters", [])
+            if not monsters:
+                print("⚠️ [Monster] لا يوجد وحوش مرتبطة بهذا الحساب.")
+                return None, None, r.status
+
+            monster = monsters[0]
+            monster_id = monster.get("_id")
+            vitals = monster.get("vitals", {})
+
+            print(f"📊 [Monster] {monster.get('name', 'وحشك')} — "
+                  f"Food:{vitals.get('food', 0):.1f}% "
+                  f"Hygiene:{vitals.get('hygiene', 0):.1f}% "
+                  f"Energy:{vitals.get('energy', 0):.1f}%")
+
+            return monster_id, vitals, r.status
+    except Exception as e:
+        print(f"⚠️ [Monster] خطأ شبكة أثناء جلب بيانات الوحش: {e}")
+        return None, None, None
+
+
+async def execute_instant_ad_monster(session: aiohttp.ClientSession, token: str, monster_id: str, item_id: str, label: str):
     headers = build_headers_monster(token)
     payload = {
         "action": "vitals",
-        "metadata": {"monsterId": MONSTER_ID, "itemId": item_id},
+        "metadata": {"monsterId": monster_id, "itemId": item_id},
     }
     try:
         async with session.post(API_CREATE_AD, headers=headers, json=payload, timeout=15) as res_create:
             if res_create.status == 401:
                 return 401
-            
+
             text_create = await res_create.text()
             if res_create.status != 200:
                 print(f"❌ [Monster] فشل إنشاء ({label}): {res_create.status} - {text_create}")
                 return res_create.status
-                
+
             data_create = json.loads(text_create)
             tx_id = data_create.get("adTxId")
 
@@ -284,10 +316,11 @@ async def execute_instant_ad_monster(session: aiohttp.ClientSession, token: str,
 
         print(f"⚡ [Monster] تم إنشاء ({label}) -> ID: {tx_id}")
 
-        await asyncio.sleep(8)
+        # فاصل معقول بين إنشاء المهمة وتنفيذها (يحاكي مدة مشاهدة إعلان حقيقي)
+        await asyncio.sleep(random.randint(8, 12))
 
         async with session.get(f"{API_TASK_RESULT}?txId={tx_id}", headers=headers, timeout=15) as res_check:
-            pass 
+            pass
 
         payload_complete = {"adTxId": tx_id, "provider": "gigapub"}
         async with session.post(API_COMPLETE_AD, headers=headers, json=payload_complete, timeout=15) as res_complete:
@@ -301,8 +334,76 @@ async def execute_instant_ad_monster(session: aiohttp.ClientSession, token: str,
         return None
 
 
+async def check_and_boost_low_vitals(session: aiohttp.ClientSession, client: TelegramClient, token: str):
+    """
+    يفحص النسب الحالية للوحش، ولو أي نسبة <= THRESHOLD،
+    يشاهد إعلانها المقابل تلقائيًا. يرجع التوكن المحدَّث (لو تجدد).
+    """
+    monster_id, vitals, status = await get_monster_info(session, token)
+
+    if status == 401:
+        print("🔄 [Monster] التوكن منتهي أثناء جلب البيانات — تجديد...")
+        token = await fetch_fresh_token_monster(client)
+        if not token:
+            return token
+        monster_id, vitals, status = await get_monster_info(session, token)
+
+    if not monster_id or not vitals:
+        return token
+
+    low_vitals = [
+        (name, val) for name, val in vitals.items()
+        if name in VITAL_TO_ITEM and val <= THRESHOLD
+    ]
+
+    if not low_vitals:
+        print(f"✅ [Monster] كل النسب فوق {THRESHOLD}%، لا حاجة لمشاهدة إعلانات.")
+        return token
+
+    for name, val in low_vitals:
+        item_id, label = VITAL_TO_ITEM[name]
+        print(f"⚠️ [Monster] {name} منخفض ({val:.1f}% <= {THRESHOLD}%) — مشاهدة إعلان ({label})...")
+
+        status_code = await execute_instant_ad_monster(session, token, monster_id, item_id, label)
+
+        if status_code == 401:
+            print("🔄 [Monster] التوكن منتهي — تجديد وإعادة المحاولة...")
+            token = await fetch_fresh_token_monster(client)
+            if token:
+                await execute_instant_ad_monster(session, token, monster_id, item_id, label)
+
+        # فاصل معقول بين كل إعلان وآخر (تجنب الطلبات المتلاحقة السريعة)
+        delay = random.randint(20, 40)
+        print(f"⏳ [Monster] انتظار {delay} ثانية قبل التحقق من العنصر التالي...")
+        await asyncio.sleep(delay)
+
+    return token
+
+
+async def monsterland_worker(client: TelegramClient, session: aiohttp.ClientSession):
+    current_token = await fetch_fresh_token_monster(client)
+    cycle_count = 1
+
+    while True:
+        try:
+            print(f"\n🔄 [Monster] --- الدورة التكرارية رقم #{cycle_count} ---")
+            if current_token is None:
+                current_token = await fetch_fresh_token_monster(client)
+
+            current_token = await check_and_boost_low_vitals(session, client, current_token)
+
+            cycle_delay = random.randint(400, 600)
+            print(f"\n⏳ [Monster] اكتملت الدورة #{cycle_count}. انتظار عشوائي {cycle_delay} ثانية قبل الدورة التالية...")
+            cycle_count += 1
+            await asyncio.sleep(cycle_delay)
+
+        except Exception as loop_err:
+            print(f"⚠️ [Monster] خطأ داخل حلقة التشغيل الرئيسية: {loop_err}")
+            await asyncio.sleep(10)
+
+
 # ====================================================================
-#                          مهام الخلفية Workers
+#                          مهام الخلفية ATF Workers (بدون تغيير)
 # ====================================================================
 
 async def atf_boost_worker(session, headers, me, init_data, lock):
@@ -340,43 +441,9 @@ async def atf_tasks_worker(session, headers, me, init_data, react_post, lock):
                 print("✅ [ATF] تم الانتهاء من جميع المهام بنجاح.")
             except Exception as e:
                 print(f"💥 [ATF] خطأ في حلقة المهام: {e}")
-        
+
         print(f"\n⏳ [ATF] المهام في وضع الانتظار لمدة {CYCLE_INTERVAL_ATF} ثانية...\n")
         await asyncio.sleep(CYCLE_INTERVAL_ATF)
-
-
-async def monsterland_worker(client: TelegramClient, session: aiohttp.ClientSession):
-    current_token = await fetch_fresh_token_monster(client)
-    cycle_count = 1
-    
-    while True:
-        try:
-            print(f"\n🔄 [Monster] --- الدورة التكرارية رقم #{cycle_count} ---")
-            if current_token is None:
-                current_token = await fetch_fresh_token_monster(client)
-
-            for idx, (item_id, label) in enumerate(ITEMS_LIST_MONSTER):
-                status = await execute_instant_ad_monster(session, current_token, item_id, label)
-
-                if status == 401:
-                    print("🔄 [Monster] التوكن منتهي — جاري تجديد التوكن وإعادة المحاولة...")
-                    current_token = await fetch_fresh_token_monster(client)
-                    if current_token:
-                        await execute_instant_ad_monster(session, current_token, item_id, label)
-
-                if idx < len(ITEMS_LIST_MONSTER) - 1:
-                    delay = random.randint(30, 60)
-                    print(f"⏳ [Monster] انتظار عشوائي {delay} ثانية قبل الإعلان التالي...")
-                    await asyncio.sleep(delay)
-
-            cycle_delay = random.randint(400, 600)
-            print(f"\n⏳ [Monster] اكتملت الدورة #{cycle_count}. انتظار عشوائي {cycle_delay} ثانية قبل الدورة التالية...")
-            cycle_count += 1
-            await asyncio.sleep(cycle_delay)
-
-        except Exception as loop_err:
-            print(f"⚠️ [Monster] خطأ داخل حلقة التشغيل الرئيسية: {loop_err}")
-            await asyncio.sleep(10)
 
 
 # ====================================================================
@@ -388,10 +455,10 @@ async def run_atf_bot(http_session):
     async with TelegramClient(StringSession(SESSION_STRING_ATF), API_ID, API_HASH) as client_atf:
         me_atf = await client_atf.get_me()
         print(f"✅ [ATF] تم تسجيل الدخول بالحساب: {me_atf.first_name} (@{me_atf.username or me_atf.id})")
-        
+
         bot_atf = await client_atf.get_input_entity(TARGET_BOT_USERNAME_ATF)
         init_data_atf = await get_init_data_atf(client_atf, bot_atf)
-        
+
         if not init_data_atf:
             print("❌ [ATF] فشل استخراج initData.")
             return
@@ -400,7 +467,7 @@ async def run_atf_bot(http_session):
         if not token_atf:
             print("❌ [ATF] فشل تسجيل الدخول في اللعبة.")
             return
-        
+
         print("✅ [ATF] تم المصادقة بنجاح وجاهز للعمل المستمر!")
         headers_atf = {
             "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36",
@@ -414,7 +481,6 @@ async def run_atf_bot(http_session):
         }
         atf_lock = asyncio.Lock()
 
-        # تشغيل مهام وتسريع ATF معاً
         await asyncio.gather(
             atf_tasks_worker(http_session, headers_atf, me_atf, init_data_atf, react_post_atf, atf_lock),
             atf_boost_worker(http_session, headers_atf, me_atf, init_data_atf, atf_lock)
@@ -426,17 +492,14 @@ async def run_monster_bot(http_session):
     async with TelegramClient(StringSession(SESSION_STRING_MONSTER), API_ID, API_HASH) as client_monster:
         me_monster = await client_monster.get_me()
         print(f"✅ [Monster] تم تسجيل الدخول بالحساب: {me_monster.first_name} (@{me_monster.username or me_monster.id})")
-        
-        # تشغيل حلقة إعلانات Monsterland
+
         await monsterland_worker(client_monster, http_session)
 
 
 async def main():
-    # فتح جلسة http موحدة وغير توقيفية للطلبات
     async with aiohttp.ClientSession() as http_session:
         print("\n🚀 بدء تشغيل البوتين معاً بجلستين مستقلتين تماماً...\n")
-        
-        # تشغيل البوتين بالتوازي التام دون أن يؤثر أحدهما على الآخر
+
         await asyncio.gather(
             run_atf_bot(http_session),
             run_monster_bot(http_session)
@@ -453,4 +516,3 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"⚠️ خطأ عام، إعادة التشغيل الفوري بعد 10 ثوانٍ: {e}")
             time.sleep(10)
-            
