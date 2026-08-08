@@ -25,6 +25,14 @@ ACCOUNTS_CONFIG = [
         "session_string": "1BJWap1sBuxjvSEbIQZYZ_pwBJo9M9XfWiyMQLlzTt48Ku7r1-_gW20dBsDHYtoKza6DvS1cZQsPc5e5wwJBz-SO-t4iEqHXU68xVGFVZN5gnTLUPY7Jztm21a2Snmy2SgsIGg0NK5KuxO39moAE8vnGPsdb-BDCxrvRIpxYWwEi_CYp0NZ_Z2gAfqK8ZZIM36Gyq4u0yVU_xSYdl8HmNaV0Imop8p9MnOQIHyXRswfgDSz4dMctk3_AMbsg0i7UCJ3yoHH97-UjYFqBHyi2j2LxcQrezwaJeVYvLKxmpxCf-jCwPK_a9vHaM2L7QV6wfcBsS1jgiwVVpik4XXj5aGQ18UdkCOTU=",
         "user_agent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36",
         "device_prefix": "dev-B"
+    },
+    {
+        "account_name": "الحساب الثالث",
+        "api_id": 38197378,
+        "api_hash": "1efeb1db162150616801ae759799ca97",
+        "session_string": "1BJWap1sBu6E163KHvlWxvFMB8CJa3BozQdoNy-SaM35r6cIDE4AEnw84J5EufYhMXmliVmRPg0vYpQbKBEKGhKgugLK6V-JZL09a7g-T77PHK9UA9ERCfpG4cxLK26IRI-nMw81WcH-q83TUT3XvTCOrqSJBd4WnIGo2MH8d52F_5jbj1tgvwcFvkCjIYkr0qhSx5oPbWz9gMvpIX0Rwp8vUd1yVX6pvy5-u3AIqqabkgn7JgC5-7I_B7uMTnY2vQb0_rnvkn2SoZQYXFt1yWZyWaUwJvCqlAKSYihCGc5l3yQCzMRsm4xhkC-SGsjxyncEePn5KO8_ZVM22zA_rfEqs1PqSz14=",
+        "user_agent": "Mozilla/5.0 (Linux; Android 14; Xiaomi 13T) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36",
+        "device_prefix": "dev-C"
     }
 ]
 
@@ -285,7 +293,7 @@ async def account_worker(acc_config):
 # ===================== التشغيل الرئيسي لجميع الحسابات =====================
 
 async def main():
-    print("🚀 بدء تشغيل الحسابين بالتوازي...")
+    print("🚀 بدء تشغيل الحسابات الثلاثة بالتوازي...")
     # إطلاق كافة الحسابات معاً بنفس الوقت
     await asyncio.gather(*(account_worker(acc) for acc in ACCOUNTS_CONFIG))
 
