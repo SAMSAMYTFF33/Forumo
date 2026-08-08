@@ -6,7 +6,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, ContextTypes, ConversationHandler, filters
 
 BOT_TOKEN = "8976290159:AAH10zmWMqZ2QbSx5bBxf9ckoUAwuU0Rhic"
-ALLOWED_USER_ID = 7638322813
+ALLOWED_USER_IDS = {7638322813, 97755684}
 BOT_PASSWORD = "SAMSAM@@2026"
 
 BOT_U = "monsterland_bot"
@@ -23,7 +23,7 @@ PASS, CREDS, THRESH, DELAY = range(4)
 db, ok_users = {}, set()
 
 
-def allowed(uid): return uid == ALLOWED_USER_ID
+def allowed(uid): return uid in ALLOWED_USER_IDS
 def udb(uid): return db.setdefault(uid, {"idx": 0, "accs": []})
 def acc(uid):
     d = udb(uid)
@@ -36,14 +36,39 @@ def headers(tok):
             "content-type": "application/json", "origin": APP_URL, "referer": APP_URL + "/",
             "user-agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36"}
 
+
 def parse_creds(text):
-    toks = [t.strip('"\',:=') for t in text.replace('=', ' ').replace(':', ' ').split()]
-    toks = [t for t in toks if t.lower() not in {'api_id', 'api_hash', 'session', 'session_string', 'id', 'hash'}]
+    """
+    يتعرف على API_ID / API_HASH / SESSION بغض النظر عن الترتيب أو الصيغة.
+    يدعم: كل قيمة بسطر، أو الكل بسطر واحد، مع أو بدون "key = value".
+    """
+    # نقسّم بالأسطر أولًا، وكل سطر نشيل منه "شيء=" إذا وُجدت (أول = فقط، حتى لا نقطع الـ session)
+    raw_lines = [l.strip() for l in text.strip().splitlines() if l.strip()]
+    cleaned = []
+    for l in raw_lines:
+        if "=" in l:
+            key, val = l.split("=", 1)
+            cleaned.append(val.strip().strip('"\''))
+        else:
+            cleaned.append(l.strip().strip('"\''))
+
+    # لو كل شي جا بسطر واحد (مفصول بمسافات)، نفكّه كمان كخيار احتياطي
+    if len(cleaned) == 1 and " " in cleaned[0]:
+        cleaned = cleaned[0].split()
+        cleaned = [c.strip('"\',:=') for c in cleaned]
+
     aid = hsh = sess = None
-    for t in toks:
-        if t.isdigit() and 5 <= len(t) <= 12 and not aid: aid = t
-        elif len(t) == 32 and all(c in '0123456789abcdefABCDEF' for c in t) and not hsh: hsh = t
-        elif len(t) > 50 and not sess: sess = t
+    for t in cleaned:
+        t = t.strip()
+        if not t:
+            continue
+        if t.isdigit() and 5 <= len(t) <= 15 and not aid:
+            aid = t
+        elif len(t) == 32 and all(c in '0123456789abcdefABCDEF' for c in t) and not hsh:
+            hsh = t
+        elif len(t) > 50 and not sess:
+            sess = t
+
     return aid, hsh, sess
 
 
@@ -173,7 +198,7 @@ async def cmd_start(u: Update, c: ContextTypes.DEFAULT_TYPE):
         return PASS
     a = acc(uid)
     if not a:
-        await u.message.reply_text("أرسل بيانات الحساب:\n`API_ID API_HASH SESSION`", parse_mode="Markdown")
+        await u.message.reply_text("أرسل بيانات الحساب (بأي ترتيب):\nAPI_ID\nAPI_HASH\nSESSION", parse_mode="Markdown")
         return CREDS
     ok, m, p, tok, _ = await get_monster(a["aid"], a["ahash"], a["sess"], a.get("tok"))
     if ok: a["tok"] = tok
@@ -187,7 +212,7 @@ async def on_pass(u: Update, c: ContextTypes.DEFAULT_TYPE):
     if u.message.text.strip() == BOT_PASSWORD:
         ok_users.add(uid)
         if not acc(uid):
-            await u.message.reply_text("✅ تم!\nأرسل بيانات الحساب:\n`API_ID API_HASH SESSION`", parse_mode="Markdown")
+            await u.message.reply_text("✅ تم!\nأرسل بيانات الحساب (بأي ترتيب):\nAPI_ID\nAPI_HASH\nSESSION", parse_mode="Markdown")
             return CREDS
         await u.message.reply_text("✅ تم!\n\n🏠 القائمة الرئيسية:", reply_markup=main_kb(uid))
         return ConversationHandler.END
@@ -199,7 +224,7 @@ async def on_creds(u: Update, c: ContextTypes.DEFAULT_TYPE):
     if not allowed(uid) or uid not in ok_users: return ConversationHandler.END
     aid, ah, sess = parse_creds(u.message.text.strip())
     if not (aid and ah and sess):
-        await u.message.reply_text("⚠️ البيانات غير مكتملة.")
+        await u.message.reply_text("⚠️ البيانات غير مكتملة أو غير مفهومة. أرسلها من جديد (كل قيمة بسطر أفضل):")
         return CREDS
     msg = await u.message.reply_text("⏳ جاري التحقق...")
     ok, m, p, tok, err = await get_monster(aid, ah, sess)
@@ -273,7 +298,7 @@ async def on_button(u: Update, c: ContextTypes.DEFAULT_TYPE):
             d["idx"] = i
             await q.message.reply_text("🏠 القائمة الرئيسية:", reply_markup=main_kb(uid))
     elif data == "add":
-        await q.edit_message_text("📥 أرسل بيانات الحساب:\n`API_ID API_HASH SESSION`", parse_mode="Markdown")
+        await q.edit_message_text("📥 أرسل بيانات الحساب (بأي ترتيب):\nAPI_ID\nAPI_HASH\nSESSION", parse_mode="Markdown")
         return CREDS
     elif data == "deltmenu":
         await q.edit_message_text("🗑️ **اختر للحذف:**", reply_markup=del_kb(uid))
