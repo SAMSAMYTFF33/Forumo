@@ -2,3 +2,4 @@ telethon
 python-telegram-bot
 aiohttp
 httpx
+cryptography
