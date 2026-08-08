@@ -1,388 +1,518 @@
-import asyncio, time, random, urllib.parse, aiohttp
+import asyncio
+import urllib.parse
+import aiohttp
+import json
+import time 
+import random
+from cryptography.fernet import Fernet
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.functions.messages import RequestWebViewRequest
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, ContextTypes, ConversationHandler, filters
 
-BOT_TOKEN = "8976290159:AAH10zmWMqZ2QbSx5bBxf9ckoUAwuU0Rhic"
-ALLOWED_USER_IDS = {7638322813, 97755684}
-BOT_PASSWORD = "SAMSAM@@2026"
+# ===================== إعدادات الجلسات (Sessions منفصلة تماماً - لم تُغيّر) =====================
+SESSION_STRING_ATF = "1BJWap1sBuxjvSEbIQZYZ_pwBJo9M9XfWiyMQLlzTt48Ku7r1-_gW20dBsDHYtoKza6DvS1cZQsPc5e5wwJBz-SO-t4iEqHXU68xVGFVZN5gnTLUPY7Jztm21a2Snmy2SgsIGg0NK5KuxO39moAE8vnGPsdb-BDCxrvRIpxYWwEi_CYp0NZ_Z2gAfqK8ZZIM36Gyq4u0yVU_xSYdl8HmNaV0Imop8p9MnOQIHyXRswfgDSz4dMctk3_AMbsg0i7UCJ3yoHH97-UjYFqBHyi2j2LxcQrezwaJeVYvLKxmpxCf-jCwPK_a9vHaM2L7QV6wfcBsS1jgiwVVpik4XXj5aGQ18UdkCOTU="
 
-BOT_U = "monsterland_bot"
-APP_URL = "https://lets.playmonsterland.com"
-API_USER = f"{APP_URL}/api/user?include=monsters"
-API_VITALS = f"{APP_URL}/api/vitals"
-API_ADS = f"{APP_URL}/api/ads/create-task"
-API_RES = f"{APP_URL}/api/ads/task-result"
-API_DONE = f"{APP_URL}/api/ads/complete"
+SESSION_STRING_MONSTER = "1BJWap1wBu4nVoNbxlJjeimChDuFtJFf-DIOl0cQE-sdurr6DuG3MLi23QOlaAmdHcU4k6lvqYt0Cn9Edehg8jApjS7Hhus2LNpBPotjpyNNWSWISgWMmBA-_GV0aPcXCcL8NTNjwAvaQCPptkQ02560D2UM5iunpN7kEIkwWNa-mMRFfMmwldrK81tc7CQf2QqkGLBijcNJsw-1-7h-UZ1A1Y75gk3BaLXrM-upajdg89y9Ka-vVsiUw4CZL8gMWU2CcxkPSjoxWBA-7bzG-HPnWduIyY6G__IDUsVua9ZTCFYywMkNccpNfwdXLAPEAjtFQ-bawSyWEM9uzM2pVlfE1Nxg2Nww="
 
-ITEMS = {"food": "magic_apple", "hygiene": "magic_towel", "energy": "wizard_coffee"}
-PASS, CREDS, THRESH, DELAY = range(4)
+# ===================== البيانات المشفرة (ATF) =====================
+KEY = b'oiL4Z8RZJ-znrlkJg0fKD0xuDqWQNxfK4pbPyJWONVw='
+ENC_API_ID = b'gAAAAABqcinp5y377NK8ct-rOloxUyl_ZvHsworgDh-D4qZorDcoRwHe48_L9zVy8jwXTKFmw47o9uy_ejZDKH15PyRS-FBs6Q=='
+ENC_API_HASH = b'gAAAAABqcinptbEUy6dF8_N2jmKxdSYoHJ7NQ1BuDJlHT3WRidEUrYxRKTl8fAB624dbnifGAtJSLkcVCycLtL0cQr8NBWuxGu09P1O15-Kd_6xGO8d7yjdbRRwe0L_potYhmQesrWW2'
 
-db, ok_users = {}, set()
+def decrypt_data(encrypted: bytes) -> str:
+    cipher = Fernet(KEY)
+    return cipher.decrypt(encrypted).decode()
 
+API_ID = int(decrypt_data(ENC_API_ID))
+API_HASH = decrypt_data(ENC_API_HASH)
 
-def allowed(uid): return uid in ALLOWED_USER_IDS
-def udb(uid): return db.setdefault(uid, {"idx": 0, "accs": []})
-def acc(uid):
-    d = udb(uid)
-    if not d["accs"]: return None
-    d["idx"] = min(d["idx"], len(d["accs"]) - 1)
-    return d["accs"][d["idx"]]
+# ===================== إعدادات ATF (بدون تغيير) =====================
+TARGET_BOT_USERNAME_ATF = "ATF_AIRDROP_bot"
+WEB_APP_URL_ATF = "https://atfminers.asloni.online/miner/index.html"
+BASE_URL_ATF = "https://atfminers.asloni.online"
 
-def headers(tok):
-    return {"authority": "lets.playmonsterland.com", "accept": "*/*", "authorization": tok,
-            "content-type": "application/json", "origin": APP_URL, "referer": APP_URL + "/",
-            "user-agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36"}
+LOGIN_ENDPOINT = f"{BASE_URL_ATF}/miner/index.php?action=login"
+START_MINE_ENDPOINT = f"{BASE_URL_ATF}/miner/index.php?action=start_mine"
+ACTIVATE_BOOST_ENDPOINT = f"{BASE_URL_ATF}/miner/index.php?action=activate_boost"
+START_TASK_ENDPOINT = f"{BASE_URL_ATF}/miner/index.php?action=start_task"
+CLAIM_TASK_ENDPOINT = f"{BASE_URL_ATF}/miner/index.php?action=claim_task"
 
+CYCLE_INTERVAL_ATF = 7500
+RETRY_CLAIM_DELAY_ATF = 30
+MAX_CLAIM_RETRY_TIME_ATF = 600
 
-def parse_creds(text):
-    """
-    يتعرف على API_ID / API_HASH / SESSION بغض النظر عن الترتيب أو الصيغة.
-    يدعم: كل قيمة بسطر، أو الكل بسطر واحد، مع أو بدون "key = value".
-    """
-    # نقسّم بالأسطر أولًا، وكل سطر نشيل منه "شيء=" إذا وُجدت (أول = فقط، حتى لا نقطع الـ session)
-    raw_lines = [l.strip() for l in text.strip().splitlines() if l.strip()]
-    cleaned = []
-    for l in raw_lines:
-        if "=" in l:
-            key, val = l.split("=", 1)
-            cleaned.append(val.strip().strip('"\''))
-        else:
-            cleaned.append(l.strip().strip('"\''))
+TASKS_ATF = [
+    {"id": "youtube_like_comment", "min_seconds": 30, "name": "YouTube Like & Comment"},
+    {"id": "twitter_retweet", "min_seconds": 30, "name": "X (Twitter) Retweet"},
+    {"id": "website_visit", "min_seconds": 0, "name": "Visit Website"},
+    {"id": "telegram_react_latest", "min_seconds": 20, "name": "React to latest post"}
+]
 
-    # لو كل شي جا بسطر واحد (مفصول بمسافات)، نفكّه كمان كخيار احتياطي
-    if len(cleaned) == 1 and " " in cleaned[0]:
-        cleaned = cleaned[0].split()
-        cleaned = [c.strip('"\',:=') for c in cleaned]
+# ===================== إعدادات Monsterland =====================
+TARGET_BOT_USERNAME_MONSTER = "monsterland_bot"
+WEB_APP_URL_MONSTER = "https://lets.playmonsterland.com"
 
-    aid = hsh = sess = None
-    for t in cleaned:
-        t = t.strip()
-        if not t:
-            continue
-        if t.isdigit() and 5 <= len(t) <= 15 and not aid:
-            aid = t
-        elif len(t) == 32 and all(c in '0123456789abcdefABCDEF' for c in t) and not hsh:
-            hsh = t
-        elif len(t) > 50 and not sess:
-            sess = t
+API_USER = "https://lets.playmonsterland.com/api/user?include=monsters"
+API_CREATE_AD = "https://lets.playmonsterland.com/api/ads/create-task"
+API_TASK_RESULT = "https://lets.playmonsterland.com/api/ads/task-result"
+API_COMPLETE_AD = "https://lets.playmonsterland.com/api/ads/complete"
 
-    return aid, hsh, sess
+THRESHOLD = 55  # الحد الأدنى المقبول للنسبة
+
+# ربط كل نسبة (vital) بالعنصر المناسب لمشاهدة إعلانها
+VITAL_TO_ITEM = {
+    "food": ("magic_apple", "Feed (magic_apple)"),
+    "hygiene": ("magic_towel", "Wash (magic_towel)"),
+    "energy": ("wizard_coffee", "Wizard Coffee"),
+}
 
 
-# ============== أزرار (بدون أي تغيير) ==============
+# ====================================================================
+#                          دوال ATF الأساسية (بدون تغيير)
+# ====================================================================
 
-def main_kb(uid):
-    a = acc(uid)
-    if not a: return InlineKeyboardMarkup([[InlineKeyboardButton("➕ إضافة حساب", callback_data="add")]])
-    ads = "الخدمة ADS قيد تشغيل 🟢" if a["ads"] else "الخدمة ADS متوقفة 🔴"
-    noads = "تنفيد بدون ADS مشغل 🟢" if a["noads"] else "تنفيد بدون ADS متوقف 🔴"
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton(f"👤 {a['name']} 🔄", callback_data="accs")],
-        [InlineKeyboardButton(ads, callback_data="t_ads")],
-        [InlineKeyboardButton(noads, callback_data="t_noads")],
-        [InlineKeyboardButton("📊 معلومات الوحش الحالية", callback_data="info")],
-        [InlineKeyboardButton("Setting ⚙️", callback_data="settings")],
-        [InlineKeyboardButton("🎯 تنفيذ مباشر", callback_data="direct")],
-    ])
-
-def accs_kb(uid):
-    d = udb(uid)
-    kb = [[InlineKeyboardButton(("✅" if i == d["idx"] else "🔘") + " " + a["name"], callback_data=f"sw_{i}")]
-          for i, a in enumerate(d["accs"])]
-    kb += [[InlineKeyboardButton("➕ إضافة حساب جديد", callback_data="add")]]
-    if d["accs"]: kb += [[InlineKeyboardButton("🗑️ حذف حساب", callback_data="deltmenu")]]
-    kb += [[InlineKeyboardButton("🔙 رجوع", callback_data="back")]]
-    return InlineKeyboardMarkup(kb)
-
-def del_kb(uid):
-    kb = [[InlineKeyboardButton(f"❌ حذف {a['name']}", callback_data=f"del_{i}")] for i, a in enumerate(udb(uid)["accs"])]
-    kb += [[InlineKeyboardButton("🔙 إلغاء ورجوع", callback_data="accs")]]
-    return InlineKeyboardMarkup(kb)
-
-def info_text(m, p, a):
-    v = m.get("vitals", {}) if m else {}
-    t = (f"📊 **معلومات الحساب:**\n\n🍎 **نسبة magic food:** `{v.get('food',0):.2f}%`\n"
-         f"🧻 **نسبة wash:** `{v.get('hygiene',0):.2f}%`\n☕️ **نسبة energy:** `{v.get('energy',0):.2f}%`\n"
-         f"💰 **عدد Lumis:** `{p.get('lumis',0) if p else 0}`\n")
-    if a and a.get("sched", 0) > 0:
-        rem = int(a["sched"] - time.time())
-        t += f"\n⏳ **سيتم شراء {a.get('sv','عنصر')} تلقائياً بعد:** `{rem}` **ثانية**" if rem > 0 else "\n⏳ **جاري تنفيذ عملية شراء الآن...**"
-    return t
-
-
-# ============== منطق اللعبة ==============
-
-async def get_monster(aid, ahash, sess, tok=None):
-    if tok:
-        async with aiohttp.ClientSession() as s:
-            async with s.get(API_USER, headers=headers(tok), timeout=10) as r:
-                if r.status == 200:
-                    d = await r.json()
-                    ms = d.get("monsters", [])
-                    if ms: return True, ms[0], d.get("profile", {}), tok, None
+async def get_init_data_atf(client, bot):
     try:
-        async with TelegramClient(StringSession(sess), int(aid), ahash) as c:
-            bot = await c.get_input_entity(BOT_U)
-            wv = await c(RequestWebViewRequest(peer=bot, bot=bot, platform="android", from_bot_menu=False, url=APP_URL))
-            init = wv.url.split("tgWebAppData=")[1].split("&tgWebAppVersion")[0]
-            ntok = f"tma {urllib.parse.unquote(init)}"
-            async with aiohttp.ClientSession() as s:
-                async with s.get(API_USER, headers=headers(ntok), timeout=10) as r:
-                    if r.status != 200: return False, None, None, None, f"خطأ سيرفر ({r.status})"
-                    d = await r.json()
-                    ms = d.get("monsters", [])
-                    if not ms: return False, None, None, None, "لا يوجد وحش."
-                    return True, ms[0], d.get("profile", {}), ntok, None
+        web_view = await client(RequestWebViewRequest(
+            peer=bot, bot=bot, platform="android", from_bot_menu=True, url=WEB_APP_URL_ATF
+        ))
+        raw_url = web_view.url
+        if "#tgWebAppData=" in raw_url:
+            encoded = raw_url.split("#tgWebAppData=")[1].split("&")[0]
+        elif "tgWebAppData=" in raw_url:
+            encoded = raw_url.split("tgWebAppData=")[1].split("&")[0]
+        else:
+            return None
+        return urllib.parse.unquote(encoded)
     except Exception as e:
-        return False, None, None, None, f"فشل الاتصال: {e}"
+        print(f"⚠️ [ATF] خطأ في استخراج initData: {e}")
+        return None
 
-async def buy_direct(tok, mid, item):
-    async with aiohttp.ClientSession() as s:
-        async with s.post(API_VITALS, headers=headers(tok), json={"monsterId": mid, "itemId": item, "action": "purchase"}, timeout=15) as r:
-            return r.status
+async def login_atf(session, init_data, tg_id, username):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36",
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/plain, */*",
+        "Origin": BASE_URL_ATF,
+        "Referer": f"{BASE_URL_ATF}/miner/index.html",
+        "X-Requested-With": "XMLHttpRequest",
+        "X-Telegram-Init-Data": init_data,
+    }
+    payload = {
+        "initData": init_data,
+        "tg_id": tg_id,
+        "username": username or "",
+        "request_id": f"rq-{int(time.time()*1000)}-{tg_id}",
+        "device_id": f"dev-{tg_id}-{int(time.time())}"
+    }
+    async with session.post(LOGIN_ENDPOINT, json=payload, headers=headers) as resp:
+        if resp.status == 200:
+            data = await resp.json()
+            if data.get("status") == "success":
+                return data.get("tma_session_token"), data.get("react_post"), headers
+    return None, None, None
 
-async def buy_with_ad(tok, mid, item):
-    async with aiohttp.ClientSession() as s:
-        async with s.post(API_ADS, headers=headers(tok), json={"action": "vitals", "metadata": {"monsterId": mid, "itemId": item}}, timeout=15) as r:
-            if r.status != 200: return r.status
-            tx = (await r.json()).get("adTxId")
-        if not tx: return None
+async def do_boost_atf(session, headers, payload):
+    try:
+        async with session.post(ACTIVATE_BOOST_ENDPOINT, json=payload, headers=headers) as resp:
+            data = await resp.json()
+            if data.get("status") == "success":
+                print("⚡ [ATF] Boost activated successfully!")
+            else:
+                msg = data.get("message", "Unknown")
+                if "already" in msg.lower() or "wait" in msg.lower():
+                    print(f"ℹ️ [ATF] Boost: {msg}")
+                else:
+                    print(f"⚠️ [ATF] Boost failed: {msg}")
+            return data
+    except Exception as e:
+        print(f"💥 [ATF] Boost error: {e}")
+        return None
+
+async def attempt_claim_atf(session, headers, claim_payload, task_name):
+    try:
+        async with session.post(CLAIM_TASK_ENDPOINT, json=claim_payload, headers=headers) as resp:
+            data = await resp.json()
+            if data.get("status") == "success":
+                reward = data.get("reward", 0)
+                print(f"✅ [ATF] {task_name} تمت المطالبة بنجاح! +{reward} ATF")
+                return True, data
+            else:
+                return False, data
+    except Exception as e:
+        print(f"❌ [ATF] خطأ في claim_task لـ {task_name}: {e}")
+        return False, {"status": "error", "message": str(e)}
+
+async def do_task_atf(session, headers, task, tg_id, init_data, react_post_link=None):
+    task_id = task["id"]
+    min_sec = task["min_seconds"]
+    task_name = task["name"]
+
+    if task_id == "telegram_react_latest" and not react_post_link:
+        print(f"⚠️ [ATF] {task_name}: لا يوجد رابط للتحديث الأخير، تخطي")
+        return
+
+    print(f"🔄 [ATF] بدء المهمة: {task_name}")
+    now = int(time.time())
+
+    start_payload = {
+        "tg_id": tg_id,
+        "task_id": task_id,
+        "client_started_at": now,
+        "initData": init_data,
+        "device_id": f"dev-{tg_id}-{now}",
+        "request_id": f"rq-{now}-{tg_id}"
+    }
+    try:
+        async with session.post(START_TASK_ENDPOINT, json=start_payload, headers=headers) as resp:
+            start_data = await resp.json()
+            if start_data.get("status") != "success":
+                print(f"❌ [ATF] فشل start_task لـ {task_name}: {start_data.get('message')}")
+                return
+            server_started_at = start_data.get("started_at")
+            started_at = int(server_started_at) if server_started_at else now
+            print(f"✅ [ATF] start_task لـ {task_name} تم، started_at={started_at}")
+    except Exception as e:
+        print(f"❌ [ATF] خطأ في start_task لـ {task_name}: {e}")
+        return
+
+    wait_time = min_sec + 3
+    if wait_time > 0:
+        print(f"⏳ [ATF] انتظار {wait_time} ثانية قبل المطالبة لـ {task_name}...")
+        await asyncio.sleep(wait_time)
+
+    claim_payload = {
+        "tg_id": tg_id,
+        "task_id": task_id,
+        "client_started_at": started_at,
+        "initData": init_data,
+        "device_id": f"dev-{tg_id}-{started_at}",
+        "request_id": f"rq-{started_at}-{tg_id}"
+    }
+
+    success, claim_data = await attempt_claim_atf(session, headers, claim_payload, task_name)
+    if success:
+        return
+
+    msg = claim_data.get("message", "").lower()
+    keywords = ["wait", "try again", "not ready", "please wait", "seconds", "cooldown", "retry"]
+    if not any(k in msg for k in keywords):
+        print(f"❌ [ATF] فشل claim_task لـ {task_name}: {claim_data.get('message')}")
+        return
+
+    print(f"⏳ [ATF] {task_name}: سيتم إعادة محاولة claim كل {RETRY_CLAIM_DELAY_ATF} ثانية...")
+    start_time = time.time()
+    while True:
+        if time.time() - start_time > MAX_CLAIM_RETRY_TIME_ATF:
+            print(f"❌ [ATF] {task_name}: انتهى وقت إعادة المحاولة.")
+            break
+        await asyncio.sleep(RETRY_CLAIM_DELAY_ATF)
+        success, claim_data = await attempt_claim_atf(session, headers, claim_payload, task_name)
+        if success:
+            return
+
+
+# ====================================================================
+#                          دوال Monsterland
+# ====================================================================
+
+def build_headers_monster(token: str) -> dict:
+    return {
+        "authority": "lets.playmonsterland.com",
+        "accept": "*/*",
+        "accept-encoding": "identity",
+        "accept-language": "ar,en-US;q=0.9,en;q=0.8,ru;q=0.7,fr;q=0.6",
+        "authorization": token,
+        "content-type": "application/json",
+        "origin": "https://lets.playmonsterland.com",
+        "referer": "https://lets.playmonsterland.com/",
+        "sec-ch-ua": '"Not;A=Brand";v="8", "Chromium";v="150", "Google Chrome";v="150"',
+        "sec-ch-ua-mobile": "?1",
+        "sec-ch-ua-platform": '"Android"',
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-origin",
+        "user-agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36",
+    }
+
+async def fetch_fresh_token_monster(client: TelegramClient) -> str:
+    try:
+        bot = await client.get_input_entity(TARGET_BOT_USERNAME_MONSTER)
+        web_view = await client(
+            RequestWebViewRequest(
+                peer=bot, bot=bot, platform="android", from_bot_menu=False, url=WEB_APP_URL_MONSTER
+            )
+        )
+        raw_url = web_view.url
+        if "tgWebAppData=" not in raw_url:
+            print(f"❌ [Monster] تعذر استخراج initData من: {raw_url}")
+            return None
+
+        init_data = raw_url.split("tgWebAppData=")[1].split("&tgWebAppVersion")[0]
+        decoded = urllib.parse.unquote(init_data)
+        token = f"tma {decoded}"
+        print("🔑 [Monster] تم توليد توكن جديد.")
+        return token
+    except Exception as e:
+        print(f"⚠️ [Monster] فشل توليد توكن جديد: {e}")
+        return None
+
+
+async def get_monster_info(session: aiohttp.ClientSession, token: str):
+    """يرجع (monster_id, vitals_dict, status_code)."""
+    headers = build_headers_monster(token)
+    try:
+        async with session.get(API_USER, headers=headers, timeout=15) as r:
+            if r.status == 401:
+                return None, None, 401
+            text = await r.text()
+            if r.status != 200:
+                print(f"❌ [Monster] فشل جلب بيانات المستخدم: {r.status} - {text}")
+                return None, None, r.status
+
+            data = json.loads(text)
+            monsters = data.get("monsters", [])
+            if not monsters:
+                print("⚠️ [Monster] لا يوجد وحوش مرتبطة بهذا الحساب.")
+                return None, None, r.status
+
+            monster = monsters[0]
+            monster_id = monster.get("_id")
+            vitals = monster.get("vitals", {})
+
+            print(f"📊 [Monster] {monster.get('name', 'وحشك')} — "
+                  f"Food:{vitals.get('food', 0):.1f}% "
+                  f"Hygiene:{vitals.get('hygiene', 0):.1f}% "
+                  f"Energy:{vitals.get('energy', 0):.1f}%")
+
+            return monster_id, vitals, r.status
+    except Exception as e:
+        print(f"⚠️ [Monster] خطأ شبكة أثناء جلب بيانات الوحش: {e}")
+        return None, None, None
+
+
+async def execute_instant_ad_monster(session: aiohttp.ClientSession, token: str, monster_id: str, item_id: str, label: str):
+    headers = build_headers_monster(token)
+    payload = {
+        "action": "vitals",
+        "metadata": {"monsterId": monster_id, "itemId": item_id},
+    }
+    try:
+        async with session.post(API_CREATE_AD, headers=headers, json=payload, timeout=15) as res_create:
+            if res_create.status == 401:
+                return 401
+
+            text_create = await res_create.text()
+            if res_create.status != 200:
+                print(f"❌ [Monster] فشل إنشاء ({label}): {res_create.status} - {text_create}")
+                return res_create.status
+
+            data_create = json.loads(text_create)
+            tx_id = data_create.get("adTxId")
+
+        if not tx_id:
+            print(f"⚠️ [Monster] لم يتم العثور على adTxId لـ ({label}).")
+            return None
+
+        print(f"⚡ [Monster] تم إنشاء ({label}) -> ID: {tx_id}")
+
+        # فاصل معقول بين إنشاء المهمة وتنفيذها (يحاكي مدة مشاهدة إعلان حقيقي)
         await asyncio.sleep(random.randint(8, 12))
-        async with s.get(f"{API_RES}?txId={tx}", headers=headers(tok), timeout=15): pass
-        async with s.post(API_DONE, headers=headers(tok), json={"adTxId": tx, "provider": "gigapub"}, timeout=15) as r:
-            return r.status
 
-async def bg_worker():
+        async with session.get(f"{API_TASK_RESULT}?txId={tx_id}", headers=headers, timeout=15) as res_check:
+            pass
+
+        payload_complete = {"adTxId": tx_id, "provider": "gigapub"}
+        async with session.post(API_COMPLETE_AD, headers=headers, json=payload_complete, timeout=15) as res_complete:
+            text_complete = await res_complete.text()
+            print(f"🚀 [Monster] تأكيد إكمال ({label}): Status {res_complete.status}")
+            print(f"[Monster] Response: {text_complete}")
+            return res_complete.status
+
+    except Exception as e:
+        print(f"⚠️ [Monster] خطأ شبكة أثناء تنفيذ ({label}): {e}")
+        return None
+
+
+async def check_and_boost_low_vitals(session: aiohttp.ClientSession, client: TelegramClient, token: str):
+    """
+    يفحص النسب الحالية للوحش، ولو أي نسبة <= THRESHOLD،
+    يشاهد إعلانها المقابل تلقائيًا. يرجع التوكن المحدَّث (لو تجدد).
+    """
+    monster_id, vitals, status = await get_monster_info(session, token)
+
+    if status == 401:
+        print("🔄 [Monster] التوكن منتهي أثناء جلب البيانات — تجديد...")
+        token = await fetch_fresh_token_monster(client)
+        if not token:
+            return token
+        monster_id, vitals, status = await get_monster_info(session, token)
+
+    if not monster_id or not vitals:
+        return token
+
+    low_vitals = [
+        (name, val) for name, val in vitals.items()
+        if name in VITAL_TO_ITEM and val <= THRESHOLD
+    ]
+
+    if not low_vitals:
+        print(f"✅ [Monster] كل النسب فوق {THRESHOLD}%، لا حاجة لمشاهدة إعلانات.")
+        return token
+
+    for name, val in low_vitals:
+        item_id, label = VITAL_TO_ITEM[name]
+        print(f"⚠️ [Monster] {name} منخفض ({val:.1f}% <= {THRESHOLD}%) — مشاهدة إعلان ({label})...")
+
+        status_code = await execute_instant_ad_monster(session, token, monster_id, item_id, label)
+
+        if status_code == 401:
+            print("🔄 [Monster] التوكن منتهي — تجديد وإعادة المحاولة...")
+            token = await fetch_fresh_token_monster(client)
+            if token:
+                await execute_instant_ad_monster(session, token, monster_id, item_id, label)
+
+        # فاصل معقول بين كل إعلان وآخر (تجنب الطلبات المتلاحقة السريعة)
+        delay = random.randint(20, 40)
+        print(f"⏳ [Monster] انتظار {delay} ثانية قبل التحقق من العنصر التالي...")
+        await asyncio.sleep(delay)
+
+    return token
+
+
+async def monsterland_worker(client: TelegramClient, session: aiohttp.ClientSession):
+    current_token = await fetch_fresh_token_monster(client)
+    cycle_count = 1
+
     while True:
         try:
-            for uid, d in list(db.items()):
-                if not allowed(uid): continue
-                for a in d["accs"]:
-                    if not a["ads"] and not a["noads"]:
-                        a["sched"] = 0
-                        continue
-                    ok, m, p, tok, _ = await get_monster(a["aid"], a["ahash"], a["sess"], a.get("tok"))
-                    if not ok: continue
-                    a["tok"] = tok
-                    mid, v, th, now = m.get("_id"), m.get("vitals", {}), a["th"], time.time()
-                    target = next(((vt, it) for vt, it in ITEMS.items() if v.get(vt, 100) < th), None)
-                    if target:
-                        vt, it = target
-                        if a.get("sched", 0) == 0:
-                            lo, hi = a.get("delay", (8, 16))
-                            a["sched"] = now + random.randint(lo, hi)
-                            a["sv"] = vt
-                        elif now >= a["sched"]:
-                            if a["noads"]: await buy_direct(a["tok"], mid, it)
-                            elif a["ads"]: await buy_with_ad(a["tok"], mid, it)
-                            a["sched"] = 0
-                    else:
-                        a["sched"] = 0
-            await asyncio.sleep(10)
-        except Exception:
+            print(f"\n🔄 [Monster] --- الدورة التكرارية رقم #{cycle_count} ---")
+            if current_token is None:
+                current_token = await fetch_fresh_token_monster(client)
+
+            current_token = await check_and_boost_low_vitals(session, client, current_token)
+
+            cycle_delay = random.randint(400, 600)
+            print(f"\n⏳ [Monster] اكتملت الدورة #{cycle_count}. انتظار عشوائي {cycle_delay} ثانية قبل الدورة التالية...")
+            cycle_count += 1
+            await asyncio.sleep(cycle_delay)
+
+        except Exception as loop_err:
+            print(f"⚠️ [Monster] خطأ داخل حلقة التشغيل الرئيسية: {loop_err}")
             await asyncio.sleep(10)
 
 
-# ============== الواجهة ==============
+# ====================================================================
+#                          مهام الخلفية ATF Workers (بدون تغيير)
+# ====================================================================
 
-async def cmd_start(u: Update, c: ContextTypes.DEFAULT_TYPE):
-    uid = u.effective_user.id
-    if not allowed(uid):
-        await u.message.reply_text("⛔ غير مصرح لك.")
-        return ConversationHandler.END
-    if uid not in ok_users:
-        await u.message.reply_text("🔐 أدخل كلمة السر:")
-        return PASS
-    a = acc(uid)
-    if not a:
-        await u.message.reply_text("أرسل بيانات الحساب (بأي ترتيب):\nAPI_ID\nAPI_HASH\nSESSION", parse_mode="Markdown")
-        return CREDS
-    ok, m, p, tok, _ = await get_monster(a["aid"], a["ahash"], a["sess"], a.get("tok"))
-    if ok: a["tok"] = tok
-    txt = info_text(m, p, a) if ok else "🏠 القائمة الرئيسية:"
-    await u.message.reply_text(txt, reply_markup=main_kb(uid), parse_mode="Markdown")
-    return ConversationHandler.END
+async def atf_boost_worker(session, headers, me, init_data, lock):
+    await asyncio.sleep(2)
+    while True:
+        delay = round(random.uniform(9, 11), 2)
+        try:
+            async with lock:
+                payload = {
+                    "initData": init_data,
+                    "tg_id": me.id,
+                    "username": me.username or "",
+                    "request_id": f"rq-{int(time.time()*1000)}-{me.id}",
+                    "device_id": f"dev-{me.id}-{int(time.time())}",
+                    "display_preview": "0.0000"
+                }
+                async with session.post(START_MINE_ENDPOINT, json=payload, headers=headers) as resp:
+                    pass
+                await do_boost_atf(session, headers, payload)
+        except Exception as e:
+            print(f"💥 [ATF] خطأ في حلقة التسريع: {e}")
+        await asyncio.sleep(delay)
 
-async def on_pass(u: Update, c: ContextTypes.DEFAULT_TYPE):
-    uid = u.effective_user.id
-    if not allowed(uid): return ConversationHandler.END
-    if u.message.text.strip() == BOT_PASSWORD:
-        ok_users.add(uid)
-        if not acc(uid):
-            await u.message.reply_text("✅ تم!\nأرسل بيانات الحساب (بأي ترتيب):\nAPI_ID\nAPI_HASH\nSESSION", parse_mode="Markdown")
-            return CREDS
-        await u.message.reply_text("✅ تم!\n\n🏠 القائمة الرئيسية:", reply_markup=main_kb(uid))
-        return ConversationHandler.END
-    await u.message.reply_text("❌ كلمة السر غلط. أعد المحاولة:")
-    return PASS
 
-async def on_creds(u: Update, c: ContextTypes.DEFAULT_TYPE):
-    uid = u.effective_user.id
-    if not allowed(uid) or uid not in ok_users: return ConversationHandler.END
-    aid, ah, sess = parse_creds(u.message.text.strip())
-    if not (aid and ah and sess):
-        await u.message.reply_text("⚠️ البيانات غير مكتملة أو غير مفهومة. أرسلها من جديد (كل قيمة بسطر أفضل):")
-        return CREDS
-    msg = await u.message.reply_text("⏳ جاري التحقق...")
-    ok, m, p, tok, err = await get_monster(aid, ah, sess)
-    if not ok:
-        await msg.edit_text(f"❌ {err}\n\nأعد الإرسال:")
-        return CREDS
-    d = udb(uid)
-    a = {"aid": aid, "ahash": ah, "sess": sess, "tok": tok, "name": m.get("name", "وحش"),
-         "mid": m.get("_id"), "ads": False, "noads": False, "th": 55, "delay": (8, 16), "sched": 0, "sv": None}
-    d["accs"].append(a)
-    d["idx"] = len(d["accs"]) - 1
-    await msg.edit_text(f"✅ **تم إضافة الحساب!**\n\n{info_text(m, p, a)}", parse_mode="Markdown")
-    await u.message.reply_text("🏠 القائمة الرئيسية:", reply_markup=main_kb(uid))
-    return ConversationHandler.END
+async def atf_tasks_worker(session, headers, me, init_data, react_post, lock):
+    while True:
+        async with lock:
+            print("\n" + "="*50)
+            print("📝 [ATF] بدء تنفيذ المهام الدورية...")
+            print("="*50)
+            try:
+                react_post_link = react_post.get("link") if isinstance(react_post, dict) else None
+                for task in TASKS_ATF:
+                    await do_task_atf(session, headers, task, me.id, init_data, react_post_link)
+                print("✅ [ATF] تم الانتهاء من جميع المهام بنجاح.")
+            except Exception as e:
+                print(f"💥 [ATF] خطأ في حلقة المهام: {e}")
 
-async def on_button(u: Update, c: ContextTypes.DEFAULT_TYPE):
-    q = u.callback_query
-    await q.answer()
-    uid = u.effective_user.id
-    if not allowed(uid) or uid not in ok_users:
-        await q.edit_message_text("⛔ غير مصرح لك.")
-        return ConversationHandler.END
-    data, d, a = q.data, udb(uid), acc(uid)
+        print(f"\n⏳ [ATF] المهام في وضع الانتظار لمدة {CYCLE_INTERVAL_ATF} ثانية...\n")
+        await asyncio.sleep(CYCLE_INTERVAL_ATF)
 
-    if data == "direct":
-        if not a: return
-        kb = [[InlineKeyboardButton("🍎 Magic Food", callback_data="b_food")],
-              [InlineKeyboardButton("🧻 Wash", callback_data="b_hygiene")],
-              [InlineKeyboardButton("☕️ Energy", callback_data="b_energy")],
-              [InlineKeyboardButton("🔙 رجوع", callback_data="back")]]
-        await q.edit_message_text("🎯 **اختر العنصر:**", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
-        return
 
-    if data.startswith("b_"):
-        if not a: return
-        vt = data[2:]
-        await q.edit_message_text(f"⚡ جاري شراء **{vt}**...", parse_mode="Markdown")
-        st = await buy_direct(a["tok"], a["mid"], ITEMS[vt])
-        txt = f"✅ تم شراء **{vt}** بنجاح!" if st == 200 else f"⚠️ فشل. كود: {st}"
-        await q.edit_message_text(txt, parse_mode="Markdown", reply_markup=main_kb(uid))
-        return
+# ====================================================================
+#                          التشغيل الرئيسي المتزامن لكلتا الجلستين
+# ====================================================================
 
-    if data == "settings":
-        if not a: return
-        lo, hi = a.get("delay", (8, 16))
-        kb = [[InlineKeyboardButton("📊 تعديل النسبة", callback_data="set_th")],
-              [InlineKeyboardButton("⏱️ تعديل المهلة", callback_data="set_delay")],
-              [InlineKeyboardButton("🔙 رجوع", callback_data="back")]]
-        await q.edit_message_text(f"⚙️ **إعدادات ({a['name']})**\n\n🔹 النسبة: `{a['th']}%`\n🔹 المهلة: `{lo}`-`{hi}` ث",
-                                   parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
-        return
+async def run_atf_bot(http_session):
+    print("🔄 [ATF] جاري الاتصال بجلسة تيليجرام الخاصة بـ ATF...")
+    async with TelegramClient(StringSession(SESSION_STRING_ATF), API_ID, API_HASH) as client_atf:
+        me_atf = await client_atf.get_me()
+        print(f"✅ [ATF] تم تسجيل الدخول بالحساب: {me_atf.first_name} (@{me_atf.username or me_atf.id})")
 
-    if data == "set_th":
-        await q.edit_message_text("📊 أدخل نسبة جديدة (مثال: 55):", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("إلغاء ❌", callback_data="cancel")]]))
-        return THRESH
+        bot_atf = await client_atf.get_input_entity(TARGET_BOT_USERNAME_ATF)
+        init_data_atf = await get_init_data_atf(client_atf, bot_atf)
 
-    if data == "set_delay":
-        await q.edit_message_text("⏱️ أدخل المهلة بصيغة `min-max` (مثال: 8-16، أقل رقم 3):", parse_mode="Markdown",
-                                   reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("إلغاء ❌", callback_data="cancel")]]))
-        return DELAY
+        if not init_data_atf:
+            print("❌ [ATF] فشل استخراج initData.")
+            return
 
-    if data == "cancel":
-        await q.edit_message_text("تم الإلغاء.", reply_markup=main_kb(uid))
-        return ConversationHandler.END
+        token_atf, react_post_atf, _ = await login_atf(http_session, init_data_atf, me_atf.id, me_atf.username)
+        if not token_atf:
+            print("❌ [ATF] فشل تسجيل الدخول في اللعبة.")
+            return
 
-    if data == "accs":
-        await q.edit_message_text("🔄 **إدارة الحسابات**", reply_markup=accs_kb(uid), parse_mode="Markdown")
-    elif data.startswith("sw_"):
-        i = int(data[3:])
-        if 0 <= i < len(d["accs"]):
-            d["idx"] = i
-            await q.message.reply_text("🏠 القائمة الرئيسية:", reply_markup=main_kb(uid))
-    elif data == "add":
-        await q.edit_message_text("📥 أرسل بيانات الحساب (بأي ترتيب):\nAPI_ID\nAPI_HASH\nSESSION", parse_mode="Markdown")
-        return CREDS
-    elif data == "deltmenu":
-        await q.edit_message_text("🗑️ **اختر للحذف:**", reply_markup=del_kb(uid))
-    elif data.startswith("del_"):
-        i = int(data[4:])
-        if 0 <= i < len(d["accs"]):
-            d["accs"].pop(i)
-            d["idx"] = 0
-            await q.message.reply_text("🏠 القائمة الرئيسية:", reply_markup=main_kb(uid))
-    elif data in ("back", "info"):
-        if a:
-            ok, m, p, tok, _ = await get_monster(a["aid"], a["ahash"], a["sess"], a.get("tok"))
-            if ok:
-                a["tok"] = tok
-                await q.edit_message_text(info_text(m, p, a), reply_markup=main_kb(uid), parse_mode="Markdown")
-                return
-        await q.edit_message_text("🏠 القائمة الرئيسية:", reply_markup=main_kb(uid))
-    elif data == "t_ads":
-        if a:
-            a["ads"] = not a["ads"]
-            if a["ads"]: a["noads"] = False
-            await q.edit_message_reply_markup(reply_markup=main_kb(uid))
-    elif data == "t_noads":
-        if a:
-            a["noads"] = not a["noads"]
-            if a["noads"]: a["ads"] = False
-            await q.edit_message_reply_markup(reply_markup=main_kb(uid))
+        print("✅ [ATF] تم المصادقة بنجاح وجاهز للعمل المستمر!")
+        headers_atf = {
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36",
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/plain, */*",
+            "Origin": BASE_URL_ATF,
+            "Referer": f"{BASE_URL_ATF}/miner/index.html",
+            "X-Requested-With": "XMLHttpRequest",
+            "X-Telegram-Init-Data": init_data_atf,
+            "X-ATF-TMA-Session": token_atf,
+        }
+        atf_lock = asyncio.Lock()
 
-async def on_thresh(u: Update, c: ContextTypes.DEFAULT_TYPE):
-    uid = u.effective_user.id
-    if not allowed(uid) or uid not in ok_users: return ConversationHandler.END
-    t = u.message.text.strip()
-    if t in ("إلغاء", "/cancel"):
-        await u.message.reply_text("تم الإلغاء.", reply_markup=main_kb(uid))
-        return ConversationHandler.END
-    if not t.isdigit() or int(t) > 70:
-        await u.message.reply_text("⚠️ رقم صحيح فقط (حتى 70).")
-        return THRESH
-    a = acc(uid)
-    if a: a["th"] = int(t)
-    await u.message.reply_text("✅ تم التحديث.", reply_markup=main_kb(uid))
-    return ConversationHandler.END
+        await asyncio.gather(
+            atf_tasks_worker(http_session, headers_atf, me_atf, init_data_atf, react_post_atf, atf_lock),
+            atf_boost_worker(http_session, headers_atf, me_atf, init_data_atf, atf_lock)
+        )
 
-async def on_delay(u: Update, c: ContextTypes.DEFAULT_TYPE):
-    uid = u.effective_user.id
-    if not allowed(uid) or uid not in ok_users: return ConversationHandler.END
-    t = u.message.text.strip()
-    if t in ("إلغاء", "/cancel"):
-        await u.message.reply_text("تم الإلغاء.", reply_markup=main_kb(uid))
-        return ConversationHandler.END
-    try:
-        lo, hi = map(int, t.split("-"))
-        if lo < 3:
-            await u.message.reply_text("⚠️ أقل رقم مسموح 3. أعد الإدخال:")
-            return DELAY
-        if hi < lo:
-            await u.message.reply_text("⚠️ الحد الأقصى يجب أن يكون ≥ الأدنى. أعد الإدخال:")
-            return DELAY
-        a = acc(uid)
-        if a: a["delay"] = (lo, hi)
-        await u.message.reply_text(f"✅ تم: {lo}-{hi} ث.", reply_markup=main_kb(uid))
-        return ConversationHandler.END
-    except Exception:
-        await u.message.reply_text("⚠️ صيغة غلط. مثال: `8-16`", parse_mode="Markdown")
-        return DELAY
 
-async def on_startup(app): asyncio.create_task(bg_worker())
+async def run_monster_bot(http_session):
+    print("🔄 [Monster] جاري الاتصال بجلسة تيليجرام الخاصة بـ Monsterland...")
+    async with TelegramClient(StringSession(SESSION_STRING_MONSTER), API_ID, API_HASH) as client_monster:
+        me_monster = await client_monster.get_me()
+        print(f"✅ [Monster] تم تسجيل الدخول بالحساب: {me_monster.first_name} (@{me_monster.username or me_monster.id})")
 
-def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).post_init(on_startup).build()
-    conv = ConversationHandler(
-        entry_points=[CommandHandler("start", cmd_start), CallbackQueryHandler(on_button)],
-        states={
-            PASS: [MessageHandler(filters.TEXT & ~filters.COMMAND, on_pass)],
-            CREDS: [MessageHandler(filters.TEXT & ~filters.COMMAND, on_creds)],
-            THRESH: [CallbackQueryHandler(on_button), MessageHandler(filters.TEXT & ~filters.COMMAND, on_thresh)],
-            DELAY: [CallbackQueryHandler(on_button), MessageHandler(filters.TEXT & ~filters.COMMAND, on_delay)],
-        },
-        fallbacks=[CommandHandler("start", cmd_start), CallbackQueryHandler(on_button)],
-        allow_reentry=True,
-    )
-    app.add_handler(conv)
-    print("🚀 البوت يعمل...")
-    app.run_polling()
+        await monsterland_worker(client_monster, http_session)
+
+
+async def main():
+    async with aiohttp.ClientSession() as http_session:
+        print("\n🚀 بدء تشغيل البوتين معاً بجلستين مستقلتين تماماً...\n")
+
+        await asyncio.gather(
+            run_atf_bot(http_session),
+            run_monster_bot(http_session)
+        )
+
 
 if __name__ == "__main__":
-    main()
+    while True:
+        try:
+            asyncio.run(main())
+        except KeyboardInterrupt:
+            print("\n⏹️ تم إيقاف السكربت يدوياً.")
+            break
+        except Exception as e:
+            print(f"⚠️ خطأ عام، إعادة التشغيل الفوري بعد 10 ثوانٍ: {e}")
+            time.sleep(10)
