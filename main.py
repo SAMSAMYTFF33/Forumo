@@ -4,6 +4,8 @@ import aiohttp
 import json
 import time 
 import random
+import sys
+import subprocess
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.functions.messages import RequestWebViewRequest
@@ -297,13 +299,33 @@ async def main():
     # إطلاق كافة الحسابات معاً بنفس الوقت
     await asyncio.gather(*(account_worker(acc) for acc in ACCOUNTS_CONFIG))
 
-if __name__ == "__main__":
+def run_bot():
     while True:
         try:
             asyncio.run(main())
         except KeyboardInterrupt:
             print("\n⏹️ تم إيقاف السكربت يدوياً.")
-            break
+            sys.exit(0)
         except Exception as e:
-            print(f"⚠️ خطأ عام، إعادة التشغيل الفوري بعد 10 ثوانٍ: {e}")
+            print(f"⚠️ خطأ عام في بيئة asyncio: {e}")
+            time.sleep(5)
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "--child":
+        run_bot()
+    else:
+        while True:
+            print("🚀 تشغيل عملية فرعية جديدة للبوت...")
+            try:
+                result = subprocess.run([sys.executable, __file__, "--child"])
+                if result.returncode == 0:
+                    print("\n⏹️ تم إيقاف العملية بشكل طبيعي.")
+                    break
+                print(f"\n⚠️ توقفت العملية الفرعية (كود الخروج: {result.returncode}) — إعادة التشغيل الفوري خلال 10 ثوانٍ...\n")
+            except KeyboardInterrupt:
+                print("\n⏹️ تم إيقاف السكربت الرئيسي يدوياً.")
+                break
+            except Exception as e:
+                print(f"\n⚠️ خطأ في عملية المراقب الرئيسي: {e}")
+            
             time.sleep(10)
