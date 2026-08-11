@@ -8,7 +8,7 @@ import sys
 import subprocess
 from telethon import TelegramClient
 from telethon.sessions import StringSession
-from telethon.tl.functions.messages import RequestWebViewRequest
+from telethon.tl.functions.messages import RequestWebViewRequest 
 
 # ===================== إعدادات الحسابات =====================
 ACCOUNTS_CONFIG = [
