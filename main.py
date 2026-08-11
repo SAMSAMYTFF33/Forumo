@@ -10,7 +10,7 @@ from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.functions.messages import RequestWebViewRequest 
 
-# ===================== إعدادات الحسابات =====================
+# ===================== إعدادات الحسابات  =====================
 ACCOUNTS_CONFIG = [
     {
         "account_name": "الحساب الأول",
