@@ -10,24 +10,61 @@ from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.functions.messages import RequestWebViewRequest 
 
-# ===================== إعدادات الحسابات   =====================
+# ===================== إعدادات الحسابات والهواتف =====================
 ACCOUNTS_CONFIG = [
     {
         "account_name": "الحساب الأول",
         "api_id": 31514497,
         "api_hash": "98d779341dd063307994de23cfd9796d",
         "session_string": "1BJWap1wBu4nVoNbxlJjeimChDuFtJFf-DIOl0cQE-sdurr6DuG3MLi23QOlaAmdHcU4k6lvqYt0Cn9Edehg8jApjS7Hhus2LNpBPotjpyNNWSWISgWMmBA-_GV0aPcXCcL8NTNjwAvaQCPptkQ02560D2UM5iunpN7kEIkwWNa-mMRFfMmwldrK81tc7CQf2QqkGLBijcNJsw-1-7h-UZ1A1Y75gk3BaLXrM-upajdg89y9Ka-vVsiUw4CZL8gMWU2CcxkPSjoxWBA-7bzG-HPnWduIyY6G__IDUsVua9ZTCFYywMkNccpNfwdXLAPEAjtFQ-bawSyWEM9uzM2pVlfE1Nxg2Nww=",
-        "user_agent": "Mozilla/5.0 (Linux; Android 12; SM-G998B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
-        "device_prefix": "dev-A"
+        "device_prefix": "dev-A",
+        # هاتف: Samsung Galaxy S23 Ultra (Android 14 - Chrome 124)
+        "user_agent": "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36",
+        "extra_headers": {
+            "sec-ch-ua": '"Not-A.Brand";v="99", "Chromium";v="124", "Google Chrome";v="124"',
+            "sec-ch-ua-mobile": "?1",
+            "sec-ch-ua-platform": '"Android"',
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-origin",
+            "accept-language": "ar-SA,ar;q=0.9,en-US;q=0.8,en;q=0.7"
+        }
     },
-    
+    {
+        "account_name": "الحساب الثاني",
+        "api_id": 31568734,
+        "api_hash": "7286e8c92ccc4dc698d771664bf71700",
+        "session_string": "1BJWap1sBuxjvSEbIQZYZ_pwBJo9M9XfWiyMQLlzTt48Ku7r1-_gW20dBsDHYtoKza6DvS1cZQsPc5e5wwJBz-SO-t4iEqHXU68xVGFVZN5gnTLUPY7Jztm21a2Snmy2SgsIGg0NK5KuxO39moAE8vnGPsdb-BDCxrvRIpxYWwEi_CYp0NZ_Z2gAfqK8ZZIM36Gyq4u0yVU_xSYdl8HmNaV0Imop8p9MnOQIHyXRswfgDSz4dMctk3_AMbsg0i7UCJ3yoHH97-UjYFqBHyi2j2LxcQrezwaJeVYvLKxmpxCf-jCwPK_a9vHaM2L7QV6wfcBsS1jgiwVVpik4XXj5aGQ18UdkCOTU=",
+        "device_prefix": "dev-B",
+        # هاتف: Google Pixel 8 Pro (Android 14 - Chrome 125)
+        "user_agent": "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.72 Mobile Safari/537.36",
+        "extra_headers": {
+            "sec-ch-ua": '"Google Chrome";v="125", "Chromium";v="125", "Not=A?Brand";v="24"',
+            "sec-ch-ua-mobile": "?1",
+            "sec-ch-ua-platform": '"Android"',
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-origin",
+            "accept-language": "en-US,en;q=0.9,ar;q=0.8"
+        }
+    },
     {
         "account_name": "الحساب الثالث",
         "api_id": 38197378,
         "api_hash": "1efeb1db162150616801ae759799ca97",
         "session_string": "1BJWap1sBu6E163KHvlWxvFMB8CJa3BozQdoNy-SaM35r6cIDE4AEnw84J5EufYhMXmliVmRPg0vYpQbKBEKGhKgugLK6V-JZL09a7g-T77PHK9UA9ERCfpG4cxLK26IRI-nMw81WcH-q83TUT3XvTCOrqSJBd4WnIGo2MH8d52F_5jbj1tgvwcFvkCjIYkr0qhSx5oPbWz9gMvpIX0Rwp8vUd1yVX6pvy5-u3AIqqabkgn7JgC5-7I_B7uMTnY2vQb0_rnvkn2SoZQYXFt1yWZyWaUwJvCqlAKSYihCGc5l3yQCzMRsm4xhkC-SGsjxyncEePn5KO8_ZVM22zA_rfEqs1PqSz14=",
-        "user_agent": "Mozilla/5.0 (Linux; Android 14; Xiaomi 13T) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36",
-        "device_prefix": "dev-C"
+        "device_prefix": "dev-C",
+        # هاتف: Xiaomi 13 Pro (Android 14 - Chrome 123)
+        "user_agent": "Mozilla/5.0 (Linux; Android 14; 2210132G) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.6312.118 Mobile Safari/537.36",
+        "extra_headers": {
+            "sec-ch-ua": '"Not:A-Brand";v="8", "Chromium";v="123", "Google Chrome";v="123"',
+            "sec-ch-ua-mobile": "?1",
+            "sec-ch-ua-platform": '"Android"',
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-origin",
+            "accept-language": "ar-EG,ar;q=0.9,en-US;q=0.8,en;q=0.7"
+        }
     }
 ]
 
@@ -72,22 +109,23 @@ async def get_init_data_atf(client, bot, acc_name):
         print(f"⚠️ [{acc_name}] خطأ في استخراج initData: {e}")
         return None
 
-async def login_atf(session, init_data, tg_id, username, user_agent, device_prefix):
+async def login_atf(session, init_data, tg_id, username, acc_config):
     headers = {
-        "User-Agent": user_agent,
+        "User-Agent": acc_config["user_agent"],
         "Content-Type": "application/json",
         "Accept": "application/json, text/plain, */*",
         "Origin": BASE_URL_ATF,
         "Referer": f"{BASE_URL_ATF}/miner/index.html",
         "X-Requested-With": "XMLHttpRequest",
         "X-Telegram-Init-Data": init_data,
+        **acc_config.get("extra_headers", {})
     }
     payload = {
         "initData": init_data,
         "tg_id": tg_id,
         "username": username or "",
         "request_id": f"rq-{int(time.time()*1000)}-{tg_id}",
-        "device_id": f"{device_prefix}-{tg_id}-{int(time.time())}"
+        "device_id": f"{acc_config['device_prefix']}-{tg_id}-{int(time.time())}"
     }
     async with session.post(LOGIN_ENDPOINT, json=payload, headers=headers) as resp:
         if resp.status == 200:
@@ -258,8 +296,7 @@ async def account_worker(acc_config):
                 init_data, 
                 me.id, 
                 me.username, 
-                acc_config["user_agent"], 
-                acc_config["device_prefix"]
+                acc_config
             )
 
             if not token:
@@ -276,6 +313,7 @@ async def account_worker(acc_config):
                 "X-Requested-With": "XMLHttpRequest",
                 "X-Telegram-Init-Data": init_data,
                 "X-ATF-TMA-Session": token,
+                **acc_config.get("extra_headers", {})
             }
             lock = asyncio.Lock()
 
