@@ -20,14 +20,7 @@ ACCOUNTS_CONFIG = [
         "user_agent": "Mozilla/5.0 (Linux; Android 12; SM-G998B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
         "device_prefix": "dev-A"
     },
-    {
-        "account_name": "الحساب الثاني",
-        "api_id": 31568734,
-        "api_hash": "7286e8c92ccc4dc698d771664bf71700",
-        "session_string": "1BJWap1sBuxjvSEbIQZYZ_pwBJo9M9XfWiyMQLlzTt48Ku7r1-_gW20dBsDHYtoKza6DvS1cZQsPc5e5wwJBz-SO-t4iEqHXU68xVGFVZN5gnTLUPY7Jztm21a2Snmy2SgsIGg0NK5KuxO39moAE8vnGPsdb-BDCxrvRIpxYWwEi_CYp0NZ_Z2gAfqK8ZZIM36Gyq4u0yVU_xSYdl8HmNaV0Imop8p9MnOQIHyXRswfgDSz4dMctk3_AMbsg0i7UCJ3yoHH97-UjYFqBHyi2j2LxcQrezwaJeVYvLKxmpxCf-jCwPK_a9vHaM2L7QV6wfcBsS1jgiwVVpik4XXj5aGQ18UdkCOTU=",
-        "user_agent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36",
-        "device_prefix": "dev-B"
-    },
+    
     {
         "account_name": "الحساب الثالث",
         "api_id": 38197378,
@@ -35,14 +28,6 @@ ACCOUNTS_CONFIG = [
         "session_string": "1BJWap1sBu6E163KHvlWxvFMB8CJa3BozQdoNy-SaM35r6cIDE4AEnw84J5EufYhMXmliVmRPg0vYpQbKBEKGhKgugLK6V-JZL09a7g-T77PHK9UA9ERCfpG4cxLK26IRI-nMw81WcH-q83TUT3XvTCOrqSJBd4WnIGo2MH8d52F_5jbj1tgvwcFvkCjIYkr0qhSx5oPbWz9gMvpIX0Rwp8vUd1yVX6pvy5-u3AIqqabkgn7JgC5-7I_B7uMTnY2vQb0_rnvkn2SoZQYXFt1yWZyWaUwJvCqlAKSYihCGc5l3yQCzMRsm4xhkC-SGsjxyncEePn5KO8_ZVM22zA_rfEqs1PqSz14=",
         "user_agent": "Mozilla/5.0 (Linux; Android 14; Xiaomi 13T) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36",
         "device_prefix": "dev-C"
-    },
-    {
-        "account_name": "الحساب الرابع",
-        "api_id": 39861404,
-        "api_hash": "4cb96e0a355d9eabec3f5f2cd4b67a5c",
-        "session_string": "1BJWap1wBuzfstmypFIqgw7jQtfpa7HRe-BufbZHXtBIocVy1Up-bx-axaUN18sqwIdOXNwVAlvZkZARoGBYi5vlPjuv0AizjyC7pn6Gc_x28WJkAWnMAkvzFgG1X1h27LvPGBicBavSRDjkKBT28oKLAQmK1OhTqO6Y0oCmpQnroeriqeJ2IcLxyzFe1TPQix8TKy3kZvWHTrqqwpIzAeL_4vf8_ts6JcMgivg5-wr413f_5b0eS8UaP3QOGLH1_TgJgSOnj9WDvHIfNpBXbA7pPa7zzPEaEkkqVcYa1KO2gpcYDqMCPd_c1uFDZ-G-4D4-nc1GOqfW1qAGpsftEyfqn_UPqJ6s=",
-        "user_agent": "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Mobile Safari/537.36",
-        "device_prefix": "dev-D"
     }
 ]
 
