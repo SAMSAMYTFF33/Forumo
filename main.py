@@ -65,6 +65,24 @@ ACCOUNTS_CONFIG = [
             "sec-fetch-site": "same-origin",
             "accept-language": "ar-EG,ar;q=0.9,en-US;q=0.8,en;q=0.7"
         }
+    },
+    {
+        "account_name": "الحساب الرابع",
+        "api_id": 39861404,
+        "api_hash": "4cb96e0a355d9eabec3f5f2cd4b67a5c",
+        "session_string": "1BJWap1wBuzfstmypFIqgw7jQtfpa7HRe-BufbZHXtBIocVy1Up-bx-axaUN18sqwIdOXNwVAlvZkZARoGBYi5vlPjuv0AizjyC7pn6Gc_x28WJkAWnMAkvzFgG1X1h27LvPGBicBavSRDjkKBT28oKLAQmK1OhTqO6Y0oCmpQnroeriqeJ2IcLxyzFe1TPQix8TKy3kZvWHTrqqwpIzAeL_4vf8_ts6JcMgivg5-wr413f_5b0eS8UaP3QOGLH1_TgJgSOnj9WDvHIfNpBXbA7pPa7zzPEaEkkqVcYa1KO2gpcYDqMCPd_c1uFDZ-G-4D4-nc1GOqfW1qAGpsftEyfqn_UPqJ6s=",
+        "device_prefix": "dev-D",
+        # هاتف: OnePlus 12 (Android 14 - Chrome 126)
+        "user_agent": "Mozilla/5.0 (Linux; Android 14; CPH2581) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.122 Mobile Safari/537.36",
+        "extra_headers": {
+            "sec-ch-ua": '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
+            "sec-ch-ua-mobile": "?1",
+            "sec-ch-ua-platform": '"Android"',
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-origin",
+            "accept-language": "ar-SA,ar;q=0.9,en-US;q=0.8,en;q=0.7"
+        }
     }
 ]
 
