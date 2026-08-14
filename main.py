@@ -70,7 +70,7 @@ ACCOUNTS_CONFIG = [
         "account_name": "الحساب الرابع",
         "api_id": 39861404,
         "api_hash": "4cb96e0a355d9eabec3f5f2cd4b67a5c",
-        "session_string": "1BJWap1wBuzfstmypFIqgw7jQtfpa7HRe-BufbZHXtBIocVy1Up-bx-axaUN18sqwIdOXNwVAlvZkZARoGBYi5vlPjuv0AizjyC7pn6Gc_x28WJkAWnMAkvzFgG1X1h27LvPGBicBavSRDjkKBT28oKLAQmK1OhTqO6Y0oCmpQnroeriqeJ2IcLxyzFe1TPQix8TKy3kZvWHTrqqwpIzAeL_4vf8_ts6JcMgivg5-wr413f_5b0eS8UaP3QOGLH1_TgJgSOnj9WDvHIfNpBXbA7pPa7zzPEaEkkqVcYa1KO2gpcYDqMCPd_c1uFDZ-G-4D4-nc1GOqfW1qAGpsftEyfqn_UPqJ6s=",
+        SESSION_STRING = "1BJWap1sBu1xhskVGuKzHuU5Bh2osGc406eWhbkMYvmKpvU4yFfD9p0v8SiJe7jcU88Mk7fMTwoT7NFZy8fWRdRUhTw3ox1hoeL0vFdcs5OKxXYcjmBpbc4MpQCDplAJiQcv8m2cMar0QM-gkXK3q6tmltTei5ny4uvpEPVSB3-23ogPpy3CjLkWjeegoJX6IOE3ir9b-GM8eEe1Z7WXj_wsiOohuyjUxQh4X9Sd3-63toHlqmL3b7GPkFKe07MBSiCeqA5o8aOk3ZybTYD1-N4wLbYCJHeKaM2Y_KBSabN09m7QVCA2aovDCL-mXU-ElSFRy1B-MOcysV5mHY5JQzIk0ZHyAw40=",
         "device_prefix": "dev-D",
         # هاتف: OnePlus 12 (Android 14 - Chrome 126)
         "user_agent": "Mozilla/5.0 (Linux; Android 14; CPH2581) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.122 Mobile Safari/537.36",
