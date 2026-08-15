@@ -93,23 +93,6 @@ TASKS_ATF = [
 
 ACCOUNTS_CONFIG_ATF = [
     {
-        "account_name": "ATF - الحساب الأول",
-        "api_id": 31514497,
-        "api_hash": "98d779341dd063307994de23cfd9796d",
-        "session_string": "1BJWap1wBu4nVoNbxlJjeimChDuFtJFf-DIOl0cQE-sdurr6DuG3MLi23QOlaAmdHcU4k6lvqYt0Cn9Edehg8jApjS7Hhus2LNpBPotjpyNNWSWISgWMmBA-_GV0aPcXCcL8NTNjwAvaQCPptkQ02560D2UM5iunpN7kEIkwWNa-mMRFfMmwldrK81tc7CQf2QqkGLBijcNJsw-1-7h-UZ1A1Y75gk3BaLXrM-upajdg89y9Ka-vVsiUw4CZL8gMWU2CcxkPSjoxWBA-7bzG-HPnWduIyY6G__IDUsVua9ZTCFYywMkNccpNfwdXLAPEAjtFQ-bawSyWEM9uzM2pVlfE1Nxg2Nww=",
-        "device_prefix": "dev-A",
-        "user_agent": "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36",
-        "extra_headers": {
-            "sec-ch-ua": '"Not-A.Brand";v="99", "Chromium";v="124", "Google Chrome";v="124"',
-            "sec-ch-ua-mobile": "?1",
-            "sec-ch-ua-platform": '"Android"',
-            "sec-fetch-dest": "empty",
-            "sec-fetch-mode": "cors",
-            "sec-fetch-site": "same-origin",
-            "accept-language": "ar-SA,ar;q=0.9,en-US;q=0.8,en;q=0.7"
-        }
-    },
-    {
         "account_name": "ATF - الحساب الثاني",
         "api_id": 31568734,
         "api_hash": "7286e8c92ccc4dc698d771664bf71700",
