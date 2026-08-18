@@ -1,3 +1,10 @@
+# ==============================================================================
+# ⚙️ مفاتيح التحكم بالحسابات (1 = الحساب يعمل | 0 = الحساب متوقف)
+# ==============================================================================
+ACCOUNT_1 = 1   # الحساب الأول (1 للتشغيل، 0 للإيقاف)
+ACCOUNT_2 = 1   # الحساب الثاني (1 للتشغيل، 0 للإيقاف)
+# ==============================================================================
+
 import asyncio
 import urllib.parse
 import aiohttp
@@ -13,6 +20,7 @@ from telethon.tl.functions.messages import RequestWebViewRequest
 # ===================== إعدادات الحسابات والهواتف  ===================== 
 ACCOUNTS_CONFIG = [
     {
+        "enabled": ACCOUNT_1 == 1,
         "account_name": "الحساب الأول (الثاني سابقاً)",
         "api_id": 31568734,
         "api_hash": "7286e8c92ccc4dc698d771664bf71700",
@@ -31,6 +39,7 @@ ACCOUNTS_CONFIG = [
         }
     },
     {
+        "enabled": ACCOUNT_2 == 1,
         "account_name": "الحساب الثاني (الرابع سابقاً)",
         "api_id": 39861404,
         "api_hash": "4cb96e0a355d9eabec3f5f2cd4b67a5c",
@@ -308,9 +317,15 @@ async def account_worker(acc_config):
 # ===================== التشغيل الرئيسي لجميع الحسابات =====================
 
 async def main():
-    print("🚀 بدء تشغيل كافة الحسابات بالتوازي...")
-    # إطلاق كافة الحسابات معاً بنفس الوقت
-    await asyncio.gather(*(account_worker(acc) for acc in ACCOUNTS_CONFIG))
+    # تصفية الحسابات المفعلة بناءً على الإعدادات العلوية
+    active_accounts = [acc for acc in ACCOUNTS_CONFIG if acc.get("enabled", True)]
+    
+    if not active_accounts:
+        print("⚠️ جميع الحسابات متوقفة (0). يرجى تغيير قيمة حساب واحد على الأقل إلى 1 في أعلى الكود.")
+        return
+
+    print(f"🚀 بدء تشغيل {len(active_accounts)} حساب(ات) مفعل(ة) بالتوازي...")
+    await asyncio.gather(*(account_worker(acc) for acc in active_accounts))
 
 def run_bot():
     while True:
