@@ -133,9 +133,9 @@ ACCOUNTS_CONFIG = [
     {
         "enabled": ATF_ACCOUNT_2 == 1,
         "account_name": "الحساب الثاني (الرابع سابقاً)",
-        "api_id": 39861404,
-        "api_hash": "4cb96e0a355d9eabec3f5f2cd4b67a5c",
-        "session_string": "1BJWap1sBu1xhskVGuKzHuU5Bh2osGc406eWhbkMYvmKpvU4yFfD9p0v8SiJe7jcU88Mk7fMTwoT7NFZy8fWRdRUhTw3ox1hoeL0vFdcs5OKxXYcjmBpbc4MpQCDplAJiQcv8m2cMar0QM-gkXK3q6tmltTei5ny4uvpEPVSB3-23ogPpy3CjLkWjeegoJX6IOE3ir9b-GM8eEe1Z7WXj_wsiOohuyjUxQh4X9Sd3-63toHlqmL3b7GPkFKe07MBSiCeqA5o8aOk3ZybTYD1-N4wLbYCJHeKaM2Y_KBSabN09m7QVCA2aovDCL-mXU-ElSFRy1B-MOcysV5mHY5JQzIk0ZHyAw40=",
+        "api_id": 38197378,
+        "api_hash": "1efeb1db162150616801ae759799ca97",
+        "session_string": "1BJWap1sBu2AYJJY6BirfGnzglAB8ppxWTbWSqjEvsAjT01QZCU-_LkiLVzmOJcpiD4NsR2UeXCb6Ujl9wuvUl7diZMgaNoV3L-RnfwKIkJFUzQ2F6txstq0gxgyjfPwQnoYhFLJGWV-8RI4bCDikGqmAzSYtwaJ7YYBP0UWPBEAAUT6cby6QAZfYAO6IXTLktrR7E48X9j5dXApa1wh8T_WPZKP5IRE8njO53kiN9_NfrBqLEz_7vogPGcDxDo9XU3S4wQ-DZTB4iEmXzzZ3dxcYrWUqpmtGLho0Uc_uS3amDa7hlg3tzo6ngvXiygMVkf8xjkxI6lAcC63gt527D43ePyRvLxY=",
         "device_prefix": "dev-D",
         "user_agent": "Mozilla/5.0 (Linux; Android 14; CPH2581) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.122 Mobile Safari/537.36",
         "extra_headers": {
