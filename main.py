@@ -5,7 +5,7 @@ MINER_ACCOUNT_1 = 1     # Cloud Miner - Xituc
 MINER_ACCOUNT_2 = 1     # Cloud Miner - gz_73
 
 ATF_ACCOUNT_1   = 1     # ATF - الثاني سابقاً
-ATF_ACCOUNT_2   = 0     # ATF - الرابع سابقاً (معطّل: AuthKeyDuplicatedError)
+ATF_ACCOUNT_2   = 1     # ATF - الرابع سابقاً (معطّل: AuthKeyDuplicatedError)
 # ==============================================================================
 
 
