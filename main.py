@@ -1,11 +1,12 @@
-# ======= =======================================================================
+# ==============================================================================
 # ⚙️ مفاتيح التحكم بكل حساب على حدة (1 = يعمل | 0 = متوقف)
 # ==============================================================================
 MINER_ACCOUNT_1 = 1     # Cloud Miner - Xituc
 MINER_ACCOUNT_2 = 1     # Cloud Miner - gz_73
 
-ATF_ACCOUNT_1   = 0     # ATF - الثاني سابقاً
-ATF_ACCOUNT_2   = 1     # ATF - الرابع سابقاً (معطّل: AuthKeyDuplicatedError)
+ATF_ACCOUNT_1   = 1     # ATF - gz
+ATF_ACCOUNT_2   = 1     # ATF - حساب حمز  
+ATF_ACCOUNT_3   = 1     # ATF - skate
 # ==============================================================================
 
 
@@ -146,6 +147,24 @@ ACCOUNTS_CONFIG = [
             "sec-fetch-mode": "cors",
             "sec-fetch-site": "same-origin",
             "accept-language": "ar-SA,ar;q=0.9,en-US;q=0.8,en;q=0.7"
+        }
+    },
+    {
+        "enabled": ATF_ACCOUNT_3 == 1,
+        "account_name": "الحساب الثالث الجديد",
+        "api_id": 38197378,
+        "api_hash": "1efeb1db162150616801ae759799ca97",
+        "session_string": "1BJWap1wBu7Oc6U4ZneKR0j1wHryzKHetYqBSdS8LkfdQfip8imnJ4bXGoRP1aptufqTcmio8XKpmGtKJXVxsJ5g_h5C42NpjWVQVZjotwR1vkz6abxa6NjON1knvuCw2tXyJCgEmjRfRVE4uxobS_fJat8a-rgSrMWIpe33NXmnu8mh4ZuauXvilX9XGDHmRynsTz7fJvT58SxtnUY6m3c5p3qS2zlmt7caVviwDTZBmlPejSvcDDx9zrRsEItxo7KGv6XGIqy6cRLrADeeLHh444BnjsYZEE6JdWUu6aWbHB7moshhEymotE8B7pOvRBl2JVszY0ZK3eK59KQH-Jly81GqXZqs=",
+        "device_prefix": "dev-E",
+        "user_agent": "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.6533.103 Mobile Safari/537.36",
+        "extra_headers": {
+            "sec-ch-ua": '"Not)A;Brand";v="99", "Google Chrome";v="127", "Chromium";v="127"',
+            "sec-ch-ua-mobile": "?1",
+            "sec-ch-ua-platform": '"Android"',
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-origin",
+            "accept-language": "en-US,en;q=0.9,ar-MA;q=0.8"
         }
     }
 ]
