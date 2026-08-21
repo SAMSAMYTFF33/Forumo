@@ -4,9 +4,10 @@
 MINER_ACCOUNT_1 = 1     # Cloud Miner - Xituc
 MINER_ACCOUNT_2 = 1     # Cloud Miner - gz_73
 
-ATF_ACCOUNT_1   = 1     # ATF - gz
-ATF_ACCOUNT_2   = 1     # ATF - حساب حمز  
-ATF_ACCOUNT_3   = 1     # ATF - skate
+ATF_ACCOUNT_1   = 1     # ATF - الثاني سابقاً
+ATF_ACCOUNT_2   = 1     # ATF - حمز 1 
+ATF_ACCOUNT_3   = 1     # ATF - الحساب الثالث
+ATF_ACCOUNT_4   = 1     # ATF  حمز 2 
 # ==============================================================================
 
 
@@ -120,6 +121,8 @@ ACCOUNTS_CONFIG = [
         "api_hash": "7286e8c92ccc4dc698d771664bf71700",
         "session_string": "1BJWap1sBuxjvSEbIQZYZ_pwBJo9M9XfWiyMQLlzTt48Ku7r1-_gW20dBsDHYtoKza6DvS1cZQsPc5e5wwJBz-SO-t4iEqHXU68xVGFVZN5gnTLUPY7Jztm21a2Snmy2SgsIGg0NK5KuxO39moAE8vnGPsdb-BDCxrvRIpxYWwEi_CYp0NZ_Z2gAfqK8ZZIM36Gyq4u0yVU_xSYdl8HmNaV0Imop8p9MnOQIHyXRswfgDSz4dMctk3_AMbsg0i7UCJ3yoHH97-UjYFqBHyi2j2LxcQrezwaJeVYvLKxmpxCf-jCwPK_a9vHaM2L7QV6wfcBsS1jgiwVVpik4XXj5aGQ18UdkCOTU=",
         "device_prefix": "dev-B",
+        "boost_enabled": True,
+        "task_interval": 7500,
         "user_agent": "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.72 Mobile Safari/537.36",
         "extra_headers": {
             "sec-ch-ua": '"Google Chrome";v="125", "Chromium";v="125", "Not=A?Brand";v="24"',
@@ -138,6 +141,8 @@ ACCOUNTS_CONFIG = [
         "api_hash": "1efeb1db162150616801ae759799ca97",
         "session_string": "1BJWap1sBu2AYJJY6BirfGnzglAB8ppxWTbWSqjEvsAjT01QZCU-_LkiLVzmOJcpiD4NsR2UeXCb6Ujl9wuvUl7diZMgaNoV3L-RnfwKIkJFUzQ2F6txstq0gxgyjfPwQnoYhFLJGWV-8RI4bCDikGqmAzSYtwaJ7YYBP0UWPBEAAUT6cby6QAZfYAO6IXTLktrR7E48X9j5dXApa1wh8T_WPZKP5IRE8njO53kiN9_NfrBqLEz_7vogPGcDxDo9XU3S4wQ-DZTB4iEmXzzZ3dxcYrWUqpmtGLho0Uc_uS3amDa7hlg3tzo6ngvXiygMVkf8xjkxI6lAcC63gt527D43ePyRvLxY=",
         "device_prefix": "dev-D",
+        "boost_enabled": True,
+        "task_interval": 7500,
         "user_agent": "Mozilla/5.0 (Linux; Android 14; CPH2581) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.122 Mobile Safari/537.36",
         "extra_headers": {
             "sec-ch-ua": '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
@@ -151,11 +156,13 @@ ACCOUNTS_CONFIG = [
     },
     {
         "enabled": ATF_ACCOUNT_3 == 1,
-        "account_name": "الحساب الثالث الجديد",
+        "account_name": "الحساب الثالث",
         "api_id": 38197378,
         "api_hash": "1efeb1db162150616801ae759799ca97",
         "session_string": "1BJWap1wBu7Oc6U4ZneKR0j1wHryzKHetYqBSdS8LkfdQfip8imnJ4bXGoRP1aptufqTcmio8XKpmGtKJXVxsJ5g_h5C42NpjWVQVZjotwR1vkz6abxa6NjON1knvuCw2tXyJCgEmjRfRVE4uxobS_fJat8a-rgSrMWIpe33NXmnu8mh4ZuauXvilX9XGDHmRynsTz7fJvT58SxtnUY6m3c5p3qS2zlmt7caVviwDTZBmlPejSvcDDx9zrRsEItxo7KGv6XGIqy6cRLrADeeLHh444BnjsYZEE6JdWUu6aWbHB7moshhEymotE8B7pOvRBl2JVszY0ZK3eK59KQH-Jly81GqXZqs=",
         "device_prefix": "dev-E",
+        "boost_enabled": False,        # بدون تسريع تعدين
+        "task_interval": 7500,         # تنفيذ المهام كل 2س و 5د (7500 ثانية)
         "user_agent": "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.6533.103 Mobile Safari/537.36",
         "extra_headers": {
             "sec-ch-ua": '"Not)A;Brand";v="99", "Google Chrome";v="127", "Chromium";v="127"',
@@ -165,6 +172,26 @@ ACCOUNTS_CONFIG = [
             "sec-fetch-mode": "cors",
             "sec-fetch-site": "same-origin",
             "accept-language": "en-US,en;q=0.9,ar-MA;q=0.8"
+        }
+    },
+    {
+        "enabled": ATF_ACCOUNT_4 == 1,
+        "account_name": "الحساب الرابع الجديد",
+        "api_id": 38197378,
+        "api_hash": "1efeb1db162150616801ae759799ca97",
+        "session_string": "1BJWap1sBu4j9pNRXRJyJM8cFNQA4qSBm7h1yYxoSdldMF9cPYV3_bLr0d_ksxdqoxhqZydscC6lPpb6tup3RnrXm17QoueAx3NZq7_wux4vWMFSj3WoyrHDkSmLlC4XyayKncCXbdMHJYGwL4I5wZwGUUrRzk13rVsXHWaXjtJPhNunpSEHGKKe_m_FuBwCno5dxpi5yWOb7Js1lPuHmE3Vbep7PnQrsIExZ_SkcLiJX2adVp84AZOi8_14ok1nJ6Ezitlng6ONN8pK7GkxU25q36lLiQ7mP8QWwcPHiWoLA48FFfbYVnrK3uS8XWnLSCAtEVwrMqd9igyRNKDqObz_3S3VzyEs=",
+        "device_prefix": "dev-F",
+        "boost_enabled": False,        # بدون تسريع تعدين
+        "task_interval": 7500,         # تنفيذ المهام كل 2س و 5د (7500 ثانية)
+        "user_agent": "Mozilla/5.0 (Linux; Android 13; 2210132G) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36",
+        "extra_headers": {
+            "sec-ch-ua": '"Not-A.Brand";v="99", "Chromium";v="124", "Google Chrome";v="124"',
+            "sec-ch-ua-mobile": "?1",
+            "sec-ch-ua-platform": '"Android"',
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-origin",
+            "accept-language": "ar-EG,ar;q=0.9,en-US;q=0.8,en;q=0.7"
         }
     }
 ]
@@ -179,7 +206,6 @@ ACTIVATE_BOOST_ENDPOINT = f"{BASE_URL_ATF}/miner/index.php?action=activate_boost
 START_TASK_ENDPOINT = f"{BASE_URL_ATF}/miner/index.php?action=start_task"
 CLAIM_TASK_ENDPOINT = f"{BASE_URL_ATF}/miner/index.php?action=claim_task"
 
-CYCLE_INTERVAL_ATF = 7500
 RETRY_CLAIM_DELAY_ATF = 30
 MAX_CLAIM_RETRY_TIME_ATF = 600
 
@@ -321,7 +347,7 @@ async def atf_boost_worker(session, headers, me, init_data, lock, device_prefix)
         await asyncio.sleep(round(random.uniform(9, 11), 2))
 
 
-async def atf_tasks_worker(session, headers, me, init_data, react_post, lock, device_prefix, acc_name):
+async def atf_tasks_worker(session, headers, me, init_data, react_post, lock, device_prefix, acc_name, interval):
     while True:
         async with lock:
             react_post_link = react_post.get("link") if isinstance(react_post, dict) else None
@@ -332,7 +358,7 @@ async def atf_tasks_worker(session, headers, me, init_data, react_post, lock, de
                     ok_count += 1
             print(f"📝 [{acc_name}] مهام: {ok_count}/{len(TASKS_ATF)} ناجحة")
 
-        await asyncio.sleep(CYCLE_INTERVAL_ATF)
+        await asyncio.sleep(interval)
 
 
 async def account_worker(acc_config):
@@ -382,10 +408,20 @@ async def account_worker(acc_config):
             }
             lock = asyncio.Lock()
 
-            await asyncio.gather(
-                atf_tasks_worker(http_session, headers, me, init_data, react_post, lock, acc_config["device_prefix"], acc_name),
-                atf_boost_worker(http_session, headers, me, init_data, lock, acc_config["device_prefix"])
-            )
+            tasks_to_run = [
+                atf_tasks_worker(
+                    http_session, headers, me, init_data, react_post, lock, 
+                    acc_config["device_prefix"], acc_name, acc_config.get("task_interval", 7500)
+                )
+            ]
+
+            # تشغيل تسريع التعدين فقط للحسابات المسموح لها (الأول والثاني)
+            if acc_config.get("boost_enabled", True):
+                tasks_to_run.append(
+                    atf_boost_worker(http_session, headers, me, init_data, lock, acc_config["device_prefix"])
+                )
+
+            await asyncio.gather(*tasks_to_run)
         except Exception as e:
             print(f"🛑 [{acc_name}] توقف: {type(e).__name__}")
         finally:
