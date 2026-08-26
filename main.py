@@ -1,8 +1,10 @@
 # ==============================================================================
 # ⚙️ مفاتيح التحكم بحسابات ATF (1 = يعمل | 0 = متوقف)
 # ==============================================================================
-ATF_ACCOUNT_1   = 1     # ATF - الثاني سابقاً
-ATF_ACCOUNT_2   = 1     # ATF - الرابع سابقاً
+ATF_ACCOUNT_1   = 1     # ATF - الحساب الأول
+ATF_ACCOUNT_2   = 1     # ATF - الحساب الثاني
+ATF_ACCOUNT_3   = 1     # ATF - الحساب الثالث
+ATF_ACCOUNT_4   = 1     # ATF - الحساب الرابع
 # ==============================================================================
 
 import time
@@ -46,6 +48,42 @@ ACCOUNTS_CONFIG = [
         "api_hash": "4cb96e0a355d9eabec3f5f2cd4b67a5c",
         "session_string": "1BJWap1sBu1xhskVGuKzHuU5Bh2osGc406eWhbkMYvmKpvU4yFfD9p0v8SiJe7jcU88Mk7fMTwoT7NFZy8fWRdRUhTw3ox1hoeL0vFdcs5OKxXYcjmBpbc4MpQCDplAJiQcv8m2cMar0QM-gkXK3q6tmltTei5ny4uvpEPVSB3-23ogPpy3CjLkWjeegoJX6IOE3ir9b-GM8eEe1Z7WXj_wsiOohuyjUxQh4X9Sd3-63toHlqmL3b7GPkFKe07MBSiCeqA5o8aOk3ZybTYD1-N4wLbYCJHeKaM2Y_KBSabN09m7QVCA2aovDCL-mXU-ElSFRy1B-MOcysV5mHY5JQzIk0ZHyAw40=",
         "device_prefix": "dev-D",
+        "user_agent": "Mozilla/5.0 (Linux; Android 14; CPH2581) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.122 Mobile Safari/537.36",
+        "extra_headers": {
+            "sec-ch-ua": '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
+            "sec-ch-ua-mobile": "?1",
+            "sec-ch-ua-platform": '"Android"',
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-origin",
+            "accept-language": "ar-SA,ar;q=0.9,en-US;q=0.8,en;q=0.7"
+        }
+    },
+    {
+        "enabled": ATF_ACCOUNT_3 == 1,
+        "account_name": "الحساب الثالث",
+        "api_id": 38197378,
+        "api_hash": "1efeb1db162150616801ae759799ca97",
+        "session_string": "1BJWap1sBu6E163KHvlWxvFMB8CJa3BozQdoNy-SaM35r6cIDE4AEnw84J5EufYhMXmliVmRPg0vYpQbKBEKGhKgugLK6V-JZL09a7g-T77PHK9UA9ERCfpG4cxLK26IRI-nMw81WcH-q83TUT3XvTCOrqSJBd4WnIGo2MH8d52F_5jbj1tgvwcFvkCjIYkr0qhSx5oPbWz9gMvpIX0Rwp8vUd1yVX6pvy5-u3AIqqabkgn7JgC5-7I_B7uMTnY2vQb0_rnvkn2SoZQYXFt1yWZyWaUwJvCqlAKSYihCGc5l3yQCzMRsm4xhkC-SGsjxyncEePn5KO8_ZVM22zA_rfEqs1PqSz14=",
+        "device_prefix": "dev-C",
+        "user_agent": "Mozilla/5.0 (Linux; Android 14; 2210132G) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.6312.118 Mobile Safari/537.36",
+        "extra_headers": {
+            "sec-ch-ua": '"Not:A-Brand";v="8", "Chromium";v="123", "Google Chrome";v="123"',
+            "sec-ch-ua-mobile": "?1",
+            "sec-ch-ua-platform": '"Android"',
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-origin",
+            "accept-language": "ar-EG,ar;q=0.9,en-US;q=0.8,en;q=0.7"
+        }
+    },
+    {
+        "enabled": ATF_ACCOUNT_4 == 1,
+        "account_name": "الحساب الرابع",
+        "api_id": 38197378,
+        "api_hash": "1efeb1db162150616801ae759799ca97",
+        "session_string": "1BJWap1sBu4j9pNRXRJyJM8cFNQA4qSBm7h1yYxoSdldMF9cPYV3_bLr0d_ksxdqoxhqZydscC6lPpb6tup3RnrXm17QoueAx3NZq7_wux4vWMFSj3WoyrHDkSmLlC4XyayKncCXbdMHJYGwL4I5wZwGUUrRzk13rVsXHWaXjtJPhNunpSEHGKKe_m_FuBwCno5dxpi5yWOb7Js1lPuHmE3Vbep7PnQrsIExZ_SkcLiJX2adVp84AZOi8_14ok1nJ6Ezitlng6ONN8pK7GkxU25q36lLiQ7mP8QWwcPHiWoLA48FFfbYVnrK3uS8XWnLSCAtEVwrMqd9igyRNKDqObz_3S3VzyEs=",
+        "device_prefix": "dev-E",
         "user_agent": "Mozilla/5.0 (Linux; Android 14; CPH2581) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.122 Mobile Safari/537.36",
         "extra_headers": {
             "sec-ch-ua": '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
@@ -319,7 +357,7 @@ if __name__ == "__main__":
         run_bot()
     else:
         while True:
-            print("🚀 تشغيل العملية (ATF فقط)...")
+            print("🚀 تشغيل العملية (ATF فقط - 4 حسابات)...")
             try:
                 result = subprocess.run([sys.executable, __file__, "--child"])
                 if result.returncode == 0:
