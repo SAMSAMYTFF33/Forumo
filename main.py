@@ -5,6 +5,7 @@ ATF_ACCOUNT_1   = 1     # ATF - gz
 ATF_ACCOUNT_2   = 1     # ATF - الحساب الثاني
 ATF_ACCOUNT_3   = 1     # ATF - SKATE 
 ATF_ACCOUNT_4   = 1     # ATF - الحساب الرابع
+ATF_ACCOUNT_5   = 1     # ATF - ZAMASO 
 # ==============================================================================
 
 import time
@@ -26,6 +27,7 @@ ACCOUNTS_CONFIG = [
     {
         "enabled": ATF_ACCOUNT_1 == 1,
         "account_name": "الحساب الأول (الثاني سابقاً)",
+        "do_boost": True,  # تفعيل تسريع التعدين
         "api_id": 31568734,
         "api_hash": "7286e8c92ccc4dc698d771664bf71700",
         "session_string": "1BJWap1sBuxjvSEbIQZYZ_pwBJo9M9XfWiyMQLlzTt48Ku7r1-_gW20dBsDHYtoKza6DvS1cZQsPc5e5wwJBz-SO-t4iEqHXU68xVGFVZN5gnTLUPY7Jztm21a2Snmy2SgsIGg0NK5KuxO39moAE8vnGPsdb-BDCxrvRIpxYWwEi_CYp0NZ_Z2gAfqK8ZZIM36Gyq4u0yVU_xSYdl8HmNaV0Imop8p9MnOQIHyXRswfgDSz4dMctk3_AMbsg0i7UCJ3yoHH97-UjYFqBHyi2j2LxcQrezwaJeVYvLKxmpxCf-jCwPK_a9vHaM2L7QV6wfcBsS1jgiwVVpik4XXj5aGQ18UdkCOTU=",
@@ -44,6 +46,7 @@ ACCOUNTS_CONFIG = [
     {
         "enabled": ATF_ACCOUNT_2 == 1,
         "account_name": "الحساب الثاني (الرابع سابقاً)",
+        "do_boost": True,  # تفعيل تسريع التعدين
         "api_id": 38197378,
         "api_hash": "1efeb1db162150616801ae759799ca97",
         "session_string": "1BJWap1sBu2AYJJY6BirfGnzglAB8ppxWTbWSqjEvsAjT01QZCU-_LkiLVzmOJcpiD4NsR2UeXCb6Ujl9wuvUl7diZMgaNoV3L-RnfwKIkJFUzQ2F6txstq0gxgyjfPwQnoYhFLJGWV-8RI4bCDikGqmAzSYtwaJ7YYBP0UWPBEAAUT6cby6QAZfYAO6IXTLktrR7E48X9j5dXApa1wh8T_WPZKP5IRE8njO53kiN9_NfrBqLEz_7vogPGcDxDo9XU3S4wQ-DZTB4iEmXzzZ3dxcYrWUqpmtGLho0Uc_uS3amDa7hlg3tzo6ngvXiygMVkf8xjkxI6lAcC63gt527D43ePyRvLxY=",
@@ -62,6 +65,7 @@ ACCOUNTS_CONFIG = [
     {
         "enabled": ATF_ACCOUNT_3 == 1,
         "account_name": "الحساب الثالث",
+        "do_boost": True,  # تفعيل تسريع التعدين
         "api_id": 38197378,
         "api_hash": "1efeb1db162150616801ae759799ca97",
         "session_string": "1BJWap1sBu3uWEMwOhx78ucgVfqr0pS4dqY-ZoadziQ2tr6oMiXKg7fJJZ1HFL2VJBIe8Krw0LJZCbFO9dczyhhdwZ1OL0sX8zwTwuSxoxWzM12cF9okgymz3b7RPMBqthYhMxZQ-ivjAiqSW3yEyUG6-roO6OpdG2ydmiFXqd8-vJxKBYpVXu1VQtqRrNEaZl9wRSWJ0U-hBypmPsvjXzo1JPfX0sqkTPB-E86AHZOqCBHzq9xFkoTyPiS60cFFpOHN8kP7Q33qnmU49Khq9YTVo-kKgxlXXys8mL_H5H-Hke_wO4skgG8j5qDmrpRKZo5guTczEOOAsxXNL7XOo8X7a_eyNAgM=",
@@ -80,11 +84,31 @@ ACCOUNTS_CONFIG = [
     {
         "enabled": ATF_ACCOUNT_4 == 1,
         "account_name": "الحساب الرابع",
+        "do_boost": False, # تعطيل تسريع التعدين (فقط مهام)
         "api_id": 38197378,
         "api_hash": "1efeb1db162150616801ae759799ca97",
         "session_string": "1BJWap1sBu4j9pNRXRJyJM8cFNQA4qSBm7h1yYxoSdldMF9cPYV3_bLr0d_ksxdqoxhqZydscC6lPpb6tup3RnrXm17QoueAx3NZq7_wux4vWMFSj3WoyrHDkSmLlC4XyayKncCXbdMHJYGwL4I5wZwGUUrRzk13rVsXHWaXjtJPhNunpSEHGKKe_m_FuBwCno5dxpi5yWOb7Js1lPuHmE3Vbep7PnQrsIExZ_SkcLiJX2adVp84AZOi8_14ok1nJ6Ezitlng6ONN8pK7GkxU25q36lLiQ7mP8QWwcPHiWoLA48FFfbYVnrK3uS8XWnLSCAtEVwrMqd9igyRNKDqObz_3S3VzyEs=",
         "device_prefix": "dev-E",
         "user_agent": "Mozilla/5.0 (Linux; Android 14; CPH2581) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.122 Mobile Safari/537.36",
+        "extra_headers": {
+            "sec-ch-ua": '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
+            "sec-ch-ua-mobile": "?1",
+            "sec-ch-ua-platform": '"Android"',
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-origin",
+            "accept-language": "ar-SA,ar;q=0.9,en-US;q=0.8,en;q=0.7"
+        }
+    },
+    {
+        "enabled": ATF_ACCOUNT_5 == 1,
+        "account_name": "الحساب الخامس (ZAMASO)",
+        "do_boost": False, # تعطيل تسريع التعدين (فقط مهام)
+        "api_id": 31514497,
+        "api_hash": "98d779341dd063307994de23cfd9796d",
+        "session_string": "1BJWap1wBu4nVoNbxlJjeimChDuFtJFf-DIOl0cQE-sdurr6DuG3MLi23QOlaAmdHcU4k6lvqYt0Cn9Edehg8jApjS7Hhus2LNpBPotjpyNNWSWISgWMmBA-_GV0aPcXCcL8NTNjwAvaQCPptkQ02560D2UM5iunpN7kEIkwWNa-mMRFfMmwldrK81tc7CQf2QqkGLBijcNJsw-1-7h-UZ1A1Y75gk3BaLXrM-upajdg89y9Ka-vVsiUw4CZL8gMWU2CcxkPSjoxWBA-7bzG-HPnWduIyY6G__IDUsVua9ZTCFYywMkNccpNfwdXLAPEAjtFQ-bawSyWEM9uzM2pVlfE1Nxg2Nww=",
+        "device_prefix": "dev-F",
+        "user_agent": "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.122 Mobile Safari/537.36",
         "extra_headers": {
             "sec-ch-ua": '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
             "sec-ch-ua-mobile": "?1",
@@ -310,11 +334,19 @@ async def account_worker(acc_config):
                 **acc_config.get("extra_headers", {})
             }
             lock = asyncio.Lock()
+            
+            # إعداد المهام التي سيقوم بها الحساب
+            workers_to_run = [
+                atf_tasks_worker(http_session, headers, me, init_data, react_post, lock, acc_config["device_prefix"], acc_name)
+            ]
+            
+            # التحقق مما إذا كان الحساب مسموح له بتسريع التعدين
+            if acc_config.get("do_boost", True):
+                workers_to_run.append(atf_boost_worker(http_session, headers, me, init_data, lock, acc_config["device_prefix"]))
+            else:
+                print(f"⚠️ [{acc_name}] سيكتفي بعمل المهام فقط ولن يضغط على تسريع التعدين (MAX SPEED).")
 
-            await asyncio.gather(
-                atf_tasks_worker(http_session, headers, me, init_data, react_post, lock, acc_config["device_prefix"], acc_name),
-                atf_boost_worker(http_session, headers, me, init_data, lock, acc_config["device_prefix"])
-            )
+            await asyncio.gather(*workers_to_run)
         except Exception as e:
             print(f"🛑 [{acc_name}] توقف: {type(e).__name__}")
         finally:
@@ -357,7 +389,7 @@ if __name__ == "__main__":
         run_bot()
     else:
         while True:
-            print("🚀 تشغيل العملية (ATF فقط - 4 حسابات)...")
+            print("🚀 تشغيل العملية (ATF فقط - حسابات متعددة)...")
             try:
                 result = subprocess.run([sys.executable, __file__, "--child"])
                 if result.returncode == 0:
