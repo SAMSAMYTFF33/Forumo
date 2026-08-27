@@ -136,7 +136,7 @@ ACTIVATE_BOOST_ENDPOINT = f"{BASE_URL_ATF}/miner/index.php?action=activate_boost
 START_TASK_ENDPOINT = f"{BASE_URL_ATF}/miner/index.php?action=start_task"
 CLAIM_TASK_ENDPOINT = f"{BASE_URL_ATF}/miner/index.php?action=claim_task"
 
-CYCLE_INTERVAL_ATF = 7500
+CYCLE_INTERVAL_ATF = 7200
 RETRY_CLAIM_DELAY_ATF = 30
 MAX_CLAIM_RETRY_TIME_ATF = 600
 
