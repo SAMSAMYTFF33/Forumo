@@ -71,11 +71,11 @@ ACCOUNTS_CONFIG = [
         "api_id": 38197378,
         "api_hash": "1efeb1db162150616801ae759799ca97",
         "session_string": "1BJWap1sBu3uWEMwOhx78ucgVfqr0pS4dqY-ZoadziQ2tr6oMiXKg7fJJZ1HFL2VJBIe8Krw0LJZCbFO9dczyhhdwZ1OL0sX8zwTwuSxoxWzM12cF9okgymz3b7RPMBqthYhMxZQ-ivjAiqSW3yEyUG6-roO6OpdG2ydmiFXqd8-vJxKBYpVXu1VQtqRrNEaZl9wRSWJ0U-hBypmPsvjXzo1JPfX0sqkTPB-E86AHZOqCBHzq9xFkoTyPiS60cFFpOHN8kP7Q33qnmU49Khq9YTVo-kKgxlXXys8mL_H5H-Hke_wO4skgG8j5qDmrpRKZo5guTczEOOAsxXNL7XOo8X7a_eyNAgM=",
-        "device_prefix": "dev-C",
-        # Samsung Galaxy A54 5G
-        "user_agent": "Mozilla/5.0 (Linux; Android 14; SM-A546B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.179 Mobile Safari/537.36",
+        "device_prefix": "dev-Oppo",
+        # Oppo A78 (هاتف متوسط وطبيعي جداً)
+        "user_agent": "Mozilla/5.0 (Linux; Android 13; CPH2565) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.119 Mobile Safari/537.36",
         "extra_headers": {
-            "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+            "sec-ch-ua": '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
             "sec-ch-ua-mobile": "?1",
             "sec-ch-ua-platform": '"Android"',
             "sec-fetch-dest": "empty",
@@ -213,7 +213,7 @@ async def attempt_claim_atf(session, headers, claim_payload):
 
 async def do_task_atf(session, headers, task, tg_id, init_data, device_prefix, react_post_link=None):
     task_id = task["id"]
-    
+
     if task_id == "telegram_react_latest" and not react_post_link:
         return False, "لا يوجد رابط"
 
@@ -339,12 +339,12 @@ async def account_worker(acc_config):
                 **acc_config.get("extra_headers", {})
             }
             lock = asyncio.Lock()
-            
+
             # إعداد المهام التي سيقوم بها الحساب
             workers_to_run = [
                 atf_tasks_worker(http_session, headers, me, init_data, react_post, lock, acc_config["device_prefix"], acc_name)
             ]
-            
+
             # التحقق مما إذا كان الحساب مسموح له بتسريع التعدين
             if acc_config.get("do_boost", True):
                 workers_to_run.append(atf_boost_worker(http_session, headers, me, init_data, lock, acc_config["device_prefix"]))
