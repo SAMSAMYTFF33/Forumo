@@ -1,10 +1,10 @@
-# =============================================================================
+# ==============================================================================
 # ⚙️ مفاتيح التحكم بحسابات ATF (1 = يعمل | 0 = متوقف)
 # ==============================================================================
 ATF_ACCOUNT_1   = 1     # ATF - gz
 ATF_ACCOUNT_2   = 1     # ATF - الحساب الثاني
 ATF_ACCOUNT_3   = 1     # ATF - SKATE 
-ATF_ACCOUNT_4   = 0     # ATF - الحساب الرابع
+ATF_ACCOUNT_4   = 1     # ATF - الحساب الرابع
 ATF_ACCOUNT_5   = 1     # ATF - ZAMASO 
 # ==============================================================================
 
@@ -188,8 +188,7 @@ async def login_atf(session, init_data, tg_id, username, acc_config):
 
 async def execute_task_atf(session, headers, tg_id, init_data, device_prefix, task, is_started, acc_name):
     now = int(time.time())
-    
-    # 1. إذا لم تكن المهمة قد بدأت -> إرسال زر GO (start_task)
+
     if not is_started:
         print(f"👉 [{acc_name}] [GO] بدء مهمة: {task['name']}")
         start_payload = {
@@ -206,10 +205,9 @@ async def execute_task_atf(session, headers, tg_id, init_data, device_prefix, ta
         except Exception as e:
             print(f"❌ [{acc_name}] خطأ في بدء المهمة {task['name']}: {e}")
             return False
-        
+
         await asyncio.sleep(task['wait'])
 
-    # 2. إرسال طلب المطالبة (CLAIM)
     print(f"🟩 [{acc_name}] [CLAIM] المطالبة بمكافأة: {task['name']}")
     claim_payload = {
         "tg_id": tg_id, "task_id": task["id"], "client_started_at": now,
@@ -236,76 +234,80 @@ async def atf_boost_worker(session, headers, me, init_data, lock, device_prefix)
         try:
             async with lock:
                 payload = {
-                    "initData": init_data, "tg_id": me.id, "username": me.username or "",
+                    "initData": init_data, 
+                    "tg_id": me.id, 
+                    "username": me.username or "",
                     "request_id": f"rq-{int(time.time()*1000)}-{me.id}",
                     "device_id": f"{device_prefix}-{me.id}-{int(time.time())}",
                     "display_preview": "0.0000"
                 }
                 async with session.post(START_MINE_ENDPOINT, json=payload, headers=headers):
                     pass
-                async with session.post(ACTIVATE_BOOST_ENDPOINT, json=payload, headers=headers):
-                    pass
-        except Exception:
+                async with session.post(ACTIVATE_BOOST_ENDPOINT, json=payload, headers=headers) as resp:
+                    if resp.status == 200:
+                        res = await resp.json()
+                        if res.get("status") == "success":
+                            print(f"🚀 [{me.id}] تم إرسال تسريع التعدين (BOOST) بنجاح!")
+        except Exception as e:
             pass
         await asyncio.sleep(round(random.uniform(9, 11), 2))
 
 
-async def smart_tasks_worker(client, bot, acc_config, lock):
+async def smart_tasks_worker(client, bot, acc_config, session, lock):
     acc_name = acc_config["account_name"]
     device_prefix = acc_config["device_prefix"]
-    
+
     while True:
+        print("\n" + "="*50)
+        print(f"🔍 [{acc_name}] فحص الوضع الحالي للمهام...")
+
         async with lock:
-            print("\n" + "="*50)
-            print(f"🔍 [{acc_name}] فحص الوضع الحالي للمهام...")
-            
             init_data = await get_init_data_atf(client, bot, acc_name)
-            if not init_data:
-                print(f"🛑 [{acc_name}] فشل جلب initData، محاولة بعد 15 ثانية...")
-                await asyncio.sleep(15)
-                continue
 
-            async with aiohttp.ClientSession() as session:
-                me = await client.get_me()
-                login_data, headers = await login_atf(session, init_data, me.id, me.username, acc_config)
-                
-                if not login_data:
-                    print(f"🛑 [{acc_name}] فشل تسجيل الدخول، محاولة بعد 15 ثانية...")
-                    await asyncio.sleep(15)
-                    continue
+        if not init_data:
+            print(f"🛑 [{acc_name}] فشل جلب initData، محاولة بعد 15 ثانية...")
+            await asyncio.sleep(15)
+            continue
 
-                cooldowns = login_data.get("task_cooldowns", {})
-                task_starts = login_data.get("task_starts", {})
-                current_time = int(time.time())
-                
-                sleep_times = []
+        me = await client.get_me()
+        
+        async with lock:
+            login_data, headers = await login_atf(session, init_data, me.id, me.username, acc_config)
 
-                for task in TASKS_ATF:
-                    task_id = task["id"]
-                    cd_time = cooldowns.get(task_id, 0)
-                    is_started = task_id in task_starts
+        if not login_data:
+            print(f"🛑 [{acc_name}] فشل تسجيل الدخول، محاولة بعد 15 ثانية...")
+            await asyncio.sleep(15)
+            continue
 
-                    # الوضع 1: المهمة قيد العد التنازلي
-                    if cd_time > current_time:
-                        remaining = cd_time - current_time
-                        sleep_times.append(remaining)
-                        mins, secs = divmod(remaining, 60)
-                        hrs, mins = divmod(mins, 60)
-                        print(f"⏳ [{acc_name}] [{task['name']}]: قيد الانتظار باقي له ({hrs}h {mins}m {secs}s)")
-                    
-                    # الوضع 2: المهمة جاهزة للتنفيذ (زر GO أو زر CLAIM)
-                    else:
-                        if is_started:
-                            print(f"💡 [{acc_name}] [{task['name']}]: يتطلب الضغط على [CLAIM]")
-                        else:
-                            print(f"💡 [{acc_name}] [{task['name']}]: يتطلب الضغط على [GO]")
+        cooldowns = login_data.get("task_cooldowns", {})
+        task_starts = login_data.get("task_starts", {})
+        current_time = int(time.time())
 
-                        await execute_task_atf(session, headers, me.id, init_data, device_prefix, task, is_started, acc_name)
+        sleep_times = []
 
-        # حساب وقت النوم المطلوب بناءً على أقرب مهمة ستنتهي
+        for task in TASKS_ATF:
+            task_id = task["id"]
+            cd_time = cooldowns.get(task_id, 0)
+            is_started = task_id in task_starts
+
+            if cd_time > current_time:
+                remaining = cd_time - current_time
+                sleep_times.append(remaining)
+                mins, secs = divmod(remaining, 60)
+                hrs, mins = divmod(mins, 60)
+                print(f"⏳ [{acc_name}] [{task['name']}]: قيد الانتظار باقي له ({hrs}h {mins}m {secs}s)")
+            else:
+                if is_started:
+                    print(f"💡 [{acc_name}] [{task['name']}]: يتطلب الضغط على [CLAIM]")
+                else:
+                    print(f"💡 [{acc_name}] [{task['name']}]: يتطلب الضغط على [GO]")
+
+                async with lock:
+                    await execute_task_atf(session, headers, me.id, init_data, device_prefix, task, is_started, acc_name)
+
         if sleep_times:
             shortest_wait = min(sleep_times)
-            next_wait = shortest_wait + 8  # إضافة 8 ثوانٍ كأمان للسيرفر
+            next_wait = shortest_wait + 8
             mins, secs = divmod(next_wait, 60)
             hrs, mins = divmod(mins, 60)
             print(f"😴 [{acc_name}] سينام لمدة: ({hrs} ساعة و {mins} دقيقة و {secs} ثانية) حتى تجهز أقرب مهمة...\n")
@@ -339,20 +341,30 @@ async def account_worker(acc_config):
         bot = await client.get_input_entity(TARGET_BOT_USERNAME_ATF)
         lock = asyncio.Lock()
 
-        workers_to_run = [
-            smart_tasks_worker(client, bot, acc_config, lock)
-        ]
+        # فتح جلسة HTTP واحدة دائمة للحساب بأكمله
+        async with aiohttp.ClientSession() as http_session:
+            init_data = await get_init_data_atf(client, bot, acc_name)
+            if not init_data:
+                print(f"🛑 [{acc_name}] فشل جلب initData الأولي")
+                await client.disconnect()
+                return
 
-        if acc_config.get("do_boost", True):
-            # إنشاء جلسة HTTP مخصصة للـ Boost المستمر
-            async with aiohttp.ClientSession() as http_session:
-                init_data = await get_init_data_atf(client, bot, acc_name)
-                if init_data:
-                    login_data, headers = await login_atf(http_session, init_data, me.id, me.username, acc_config)
-                    if headers:
-                        workers_to_run.append(atf_boost_worker(http_session, headers, me, init_data, lock, acc_config["device_prefix"]))
+            login_data, headers = await login_atf(http_session, init_data, me.id, me.username, acc_config)
+            if not headers:
+                print(f"🛑 [{acc_name}] فشل تسجيل الدخول الأولي")
+                await client.disconnect()
+                return
 
-        await asyncio.gather(*workers_to_run)
+            workers_to_run = [
+                smart_tasks_worker(client, bot, acc_config, http_session, lock)
+            ]
+
+            if acc_config.get("do_boost", True):
+                workers_to_run.append(atf_boost_worker(http_session, headers, me, init_data, lock, acc_config["device_prefix"]))
+
+            # تشغيل كلاً من المهام والتسريع معاً عبر نفس الجلسة المفتوحة
+            await asyncio.gather(*workers_to_run)
+            
     except Exception as e:
         print(f"🛑 [{acc_name}] توقف: {type(e).__name__}")
     finally:
