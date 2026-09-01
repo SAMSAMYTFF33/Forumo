@@ -14,7 +14,7 @@ from telethon.tl.types import KeyboardButtonWebView, KeyboardButtonSimpleWebView
 # ==============================================================================
 # ⚙️ مفاتيح التحكم بحسابات ATF (1 = يعمل | 0 = متوقف)
 # ==============================================================================
-ATF_ACCOUNT_1   = 1     # ATF - gz (الحساب الأول)
+ATF_ACCOUNT_1   = 0     # ATF - gz (الحساب الأول)
 ATF_ACCOUNT_2   = 1     # ATF - الحساب الثاني
 ATF_ACCOUNT_3   = 1     # ATF - SKATE (الحساب الثالث)
 ATF_ACCOUNT_4   = 0     # ATF - الحساب الرابع
