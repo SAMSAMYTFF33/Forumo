@@ -24,7 +24,7 @@ ATF_ACCOUNT_5   = 1     # ATF - ZAMASO (الحساب الخامس)
 # ⚙️ مفاتيح التحكم بحسابات BODA (1 = يعمل | 0 = متوقف)
 # ==============================================================================
 BODA_ACCOUNT_1  = 1     # BODA - gz (الحساب الأول)
-BODA_ACCOUNT_2  = 0     # BODA - الحساب الثاني (متوقف)
+BODA_ACCOUNT_2  = 1     # BODA - الحساب الثاني (متوقف)
 BODA_ACCOUNT_3  = 1     # BODA - SKATE (الحساب الثالث)
 BODA_ACCOUNT_4  = 0     # BODA - الحساب الرابع (متوقف)
 BODA_ACCOUNT_5  = 1     # BODA - ZAMASO (الحساب الخامس)
@@ -118,7 +118,7 @@ ACCOUNTS_CONFIG = [
         "atf_enabled": ATF_ACCOUNT_5 == 1,
         "boda_enabled": BODA_ACCOUNT_5 == 1,
         "account_name": "الحساب الخامس (ZAMASO)",
-        "do_boost": False,
+        "do_boost": True,
         "api_id": 31514497,
         "api_hash": "98d779341dd063307994de23cfd9796d",
         "session_string": "1BJWap1wBu4nVoNbxlJjeimChDuFtJFf-DIOl0cQE-sdurr6DuG3MLi23QOlaAmdHcU4k6lvqYt0Cn9Edehg8jApjS7Hhus2LNpBPotjpyNNWSWISgWMmBA-_GV0aPcXCcL8NTNjwAvaQCPptkQ02560D2UM5iunpN7kEIkwWNa-mMRFfMmwldrK81tc7CQf2QqkGLBijcNJsw-1-7h-UZ1A1Y75gk3BaLXrM-upajdg89y9Ka-vVsiUw4CZL8gMWU2CcxkPSjoxWBA-7bzG-HPnWduIyY6G__IDUsVua9ZTCFYywMkNccpNfwdXLAPEAjtFQ-bawSyWEM9uzM2pVlfE1Nxg2Nww=",
