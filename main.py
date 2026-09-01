@@ -6644,7 +6644,7 @@ async def build_points_statistics_message(context: ContextTypes.DEFAULT_TYPE) ->
 
     content.append(([
         "◈ عمليات الروليت الكلي  ", ([f"{total_roulette_ops:,}"], "code", None), "\n",
-        "◈ مستخدمون جدد عبر القنوات  ", ([f"{total_new_via_channels:,}"], "code", None),
+        "◈ الإحالات عبر القنوات  ", ([f"{total_new_via_channels:,}"], "code", None),
     ], "blockquote", None))
     content.append("\n\n")
 
@@ -12057,6 +12057,7 @@ async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await query.edit_message_text(
                 text=text, entities=entities,
                 reply_markup=build_points_statistics_keyboard(),
+                link_preview_options=LinkPreviewOptions(is_disabled=True),
             )
             return
 
