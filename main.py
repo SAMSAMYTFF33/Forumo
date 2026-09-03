@@ -17,7 +17,7 @@ from telethon.tl.types import KeyboardButtonWebView, KeyboardButtonSimpleWebView
 ATF_ACCOUNT_1   = 1     # ATF - gz (الحساب الأول)
 ATF_ACCOUNT_2   = 1     # ATF - الحساب ousama 
 ATF_ACCOUNT_3   = 1     # ATF - SKATE (الحساب الثالث)
-ATF_ACCOUNT_4   = 0     # ATF - الحساب الرابع
+ATF_ACCOUNT_4   = 1     # ATF - الحساب الرابع
 ATF_ACCOUNT_5   = 1     # ATF - ZAMASO (الحساب الخامس)
 
 # ==============================================================================
@@ -25,9 +25,9 @@ ATF_ACCOUNT_5   = 1     # ATF - ZAMASO (الحساب الخامس)
 # ==============================================================================
 BODA_ACCOUNT_1  = 1     # BODA - gz (الحساب الأول)
 BODA_ACCOUNT_2  = 1     # BODA - الحساب الثاني (متوقف)
-BODA_ACCOUNT_3  = 1     # BODA - SKATE (الحساب الثالث)
+BODA_ACCOUNT_3  = 0     # BODA - SKATE (الحساب الثالث)
 BODA_ACCOUNT_4  = 0     # BODA - الحساب الرابع (متوقف)
-BODA_ACCOUNT_5  = 1     # BODA - ZAMASO (الحساب الخامس)
+BODA_ACCOUNT_5  = 0     # BODA - ZAMASO (الحساب الخامس)
 # ==============================================================================
 
 # ==============================================================================
@@ -98,10 +98,10 @@ ACCOUNTS_CONFIG = [
         "atf_enabled": ATF_ACCOUNT_4 == 1,
         "boda_enabled": BODA_ACCOUNT_4 == 1,
         "account_name": "الحساب الرابع",
-        "do_boost": False,
+        "do_boost": True,
         "api_id": 38197378,
         "api_hash": "1efeb1db162150616801ae759799ca97",
-        "session_string": "1BJWap1sBu4j9pNRXRJyJM8cFNQA4qSBm7h1yYxoSdldMF9cPYV3_bLr0d_ksxdqoxhqZydscC6lPpb6tup3RnrXm17QoueAx3NZq7_wux4vWMFSj3WoyrHDkSmLlC4XyayKncCXbdMHJYGwL4I5wZwGUUrRzk13rVsXHWaXjtJPhNunpSEHGKKe_m_FuBwCno5dxpi5yWOb7Js1lPuHmE3Vbep7PnQrsIExZ_SkcLiJX2adVp84AZOi8_14ok1nJ6Ezitlng6ONN8pK7GkxU25q36lLiQ7mP8QWwcPHiWoLA48FFfbYVnrK3uS8XWnLSCAtEVwrMqd9igyRNKDqObz_3S3VzyEs=",
+        "session_string": "1BJWap1sBu3E3ixVfR8ae3yJnPtwfAjXfmbV9o_ud-zFiEbSr1ir2RUOjO2qf0jaP6P5Dpzh7sz607dhyDJX26eEo3dm-YZW0DzXKGkiOI6E7VHnMplSf1S15aKcekSHXoZ6U614I_Irx0AeoSkU12iPqy6PY5slRUUrz3D1k5MIROVwrm0Sn61yWRPJPQ-T8PAMyRjxsZHM5fuGFTz2sZRjSIpTKaleHybBFwuWRbCg3ADiYaPYsxEozXuyGmIT_dggv6gDQ6agIVkrDHUHDdzyOctKWs7UyAgSOxtrSunbtks2yEX_hvRjh5EIA9gejGO9G3sg72sbBDBCYSXXwyo2f8A4vEj8=",
         "device_prefix": "dev-E",
         "user_agent": "Mozilla/5.0 (Linux; Android 13; 2310FPCA4G) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.6312.118 Mobile Safari/537.36",
         "extra_headers": {
@@ -459,24 +459,24 @@ async def wait_until_target_time_boda():
     target = get_target_time_boda()
     now = get_morocco_time()
     wait_seconds = (target - now).total_seconds()
-    
+
     wait_hours = int(wait_seconds // 3600)
     wait_minutes = int((wait_seconds % 3600) // 60)
     wait_seconds_remain = int(wait_seconds % 60)
-    
+
     print(f"\n⏰ الوقت الحالي (المغرب): {now.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"📍 المنطقة الزمنية: GMT+1 (المغرب)")
     print(f"⏳ الانتظار حتى الساعة {TARGET_HOUR_BODA:02d}:{TARGET_MINUTE_BODA:02d} صباحاً (بتوقيت المغرب)")
     print(f"📅 التاريخ المستهدف: {target.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"⏱️ المتبقي: {wait_hours} ساعة و {wait_minutes} دقيقة و {wait_seconds_remain} ثانية")
-    
+
     last_log_time = 0
     while True:
         now = get_morocco_time()
         rem_seconds = (target - now).total_seconds()
         if rem_seconds <= 0:
             break
-        
+
         if rem_seconds > 60:
             await asyncio.sleep(30)
             if time.time() - last_log_time >= 600:
@@ -643,7 +643,7 @@ async def run_boda_tasks_for_account(acc_config):
     acc_name = acc_config["account_name"]
     now = get_morocco_time()
     print(f"\n🚀 BODA [{acc_name}] بدء تنفيذ المهام (بتوقيت المغرب: {now.strftime('%H:%M:%S')})...")
-    
+
     init_data, user_id = await get_init_data_boda(acc_config)
     if not init_data:
         print(f"❌ BODA [{acc_name}] فشل استخراج initData.")
@@ -686,7 +686,7 @@ async def run_all_boda_tasks(atf_run_event):
     print("\n" + "=" * 60)
     print("🛑 إيقاف بوت ATF مؤقتاً لبدء تشغيل بوت BODA...")
     print("=" * 60)
-    
+
     # ⏸️ إيقاف ATF مؤقتاً لمنع تعارض الجلسات
     atf_run_event.clear()
     await asyncio.sleep(3)
@@ -714,15 +714,15 @@ async def boda_scheduler_loop(atf_run_event):
     print(f"📍 المنطقة الزمنية: GMT+1 (المغرب)")
     print(f"⏰ سيبدأ العمل يومياً عند الساعة {TARGET_HOUR_BODA:02d}:{TARGET_MINUTE_BODA:02d} صباحاً (بتوقيت المغرب)")
     print("=" * 60)
-    
+
     while True:
         try:
             await wait_until_target_time_boda()
             await run_all_boda_tasks(atf_run_event)
-            
+
             print("\n⏳ BODA - انتظار 5 دقائق قبل إنهاء الدورة اليومية...")
             await pauseable_sleep(300, atf_run_event)
-            
+
         except asyncio.CancelledError:
             break
         except Exception as e:
